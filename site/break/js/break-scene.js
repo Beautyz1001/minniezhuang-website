@@ -119,8 +119,17 @@ export function createBreakScene(canvas, statusElement) {
 
   let model = null;
   let floorLamp = null;
+  let floorLampUnavailable = false;
   let destroyed = false;
   const loader = new GLTFLoader();
+
+  // 两个模型并行下载；不能让先完成的落地灯单独出现在加载画面里。
+  // 仅在完整构图准备好（或灯确实加载失败）时才揭开 3D 画布。
+  function revealCompleteComposition() {
+    if (model && (floorLamp || floorLampUnavailable)) {
+      canvas.classList.add('is-ready');
+    }
+  }
 
   function render() {
     if (!destroyed) renderer.render(scene, camera);
@@ -487,6 +496,7 @@ export function createBreakScene(canvas, statusElement) {
       frameSavedComposition();
       statusElement.textContent = 'WEBGL MODEL';
       render();
+      revealCompleteComposition();
     },
     undefined,
     () => {
@@ -512,10 +522,13 @@ export function createBreakScene(canvas, statusElement) {
       addRedLampLight();
       render();
       startLampFlicker();
+      revealCompleteComposition();
     },
     undefined,
     () => {
       // The main scene remains usable if the auxiliary lamp file cannot load.
+      floorLampUnavailable = true;
+      revealCompleteComposition();
     },
   );
 

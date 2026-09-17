@@ -175,7 +175,17 @@ html.break-route-armed .break-route-veil {
   background: #000;
 }
 
-.break-model-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.break-model-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity .38s ease;
+}
+
+/* 两个 glTF 都就绪前保持背景完整，避免先露出单独加载完的落地灯。 */
+.break-model-canvas.is-ready { opacity: 1; }
 
 .break-model-status {
   display: none;
