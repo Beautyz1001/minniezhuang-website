@@ -110,6 +110,25 @@
        ⚠ play() 的 Promise 一定要 catch——切走再切回时偶尔会抛未处理异常。 */
     const video = media && media.querySelector('video');
     if (video && section) {
+      /* 首段视频在门洞动画后很快就会出现。原来 preload="none" 会让它到
+         进入视口的那一刻才开始请求，慢网下就只能先看到 poster。首屏资源完成
+         后，利用浏览器空闲时间提前预取；保留 poster 作为加载期间的稳定画面，
+         同时尊重用户的省流设置。 */
+      const warmUpVideo = () => {
+        if (navigator.connection && navigator.connection.saveData) return;
+        video.preload = 'auto';
+        video.load();
+      };
+      const scheduleWarmUp = () => {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(warmUpVideo, { timeout: 1200 });
+        } else {
+          window.setTimeout(warmUpVideo, 450);
+        }
+      };
+      if (document.readyState === 'complete') scheduleWarmUp();
+      else window.addEventListener('load', scheduleWarmUp, { once: true });
+
       ScrollTrigger.create({
         trigger: section,
         start: 'top bottom',
