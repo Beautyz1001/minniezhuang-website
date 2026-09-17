@@ -69,6 +69,13 @@ import { createBreakScene } from './break-scene.js';
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', `查看 ${project.name} 项目详情`);
     card.innerHTML = `<img class="break-gallery-card-image" src="${project.cover}" alt="" draggable="false">`;
+    const cover = card.querySelector('.break-gallery-card-image');
+    const revealCover = () => {
+      if (cover.decode) cover.decode().then(() => cover.classList.add('is-ready')).catch(() => {});
+      else cover.classList.add('is-ready');
+    };
+    if (cover.complete) revealCover();
+    else cover.addEventListener('load', revealCover, { once: true });
     card.addEventListener('click', () => {
       if (galleryDragSuppressClick) { galleryDragSuppressClick = false; return; }
       if (index === currentIndex) openDetail(index);
@@ -584,27 +591,13 @@ import { createBreakScene } from './break-scene.js';
   measureGeometry();
   selectProject(currentIndex, { expandChannel: true });
 
-  // 从 Home/Works 点 BREAK 跳过来时，遮幕还盖着屏幕——趁这段时间把当前
-  // 可见的画廊封面图解码好，遮幕滑走时就不会再有"图还没到"的空白闪烁。
-  // 最多等 900ms 兜底，和 Works 那边的同款预加载逻辑保持一致。
-  // 3D 模型（画架/凳子/落地灯）本身的异步加载不在这次处理范围内，
-  // 照旧显示/隐藏它自己的 "LOADING MODEL" 状态文字。
-  function preloadVisibleCovers() {
-    const imgs = [...gallery.querySelectorAll('.break-gallery-card-image')];
-    const decodes = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()));
-    return Promise.all(decodes);
-  }
-
   async function playBreakRouteReveal() {
     if (!document.documentElement.classList.contains('break-route-armed')) return;
     if (!gsap || reduceMotion || !routeVeil) {
       document.documentElement.classList.remove('break-route-armed');
       return;
     }
-    await Promise.race([
-      preloadVisibleCovers(),
-      new Promise((resolve) => setTimeout(resolve, 900)),
-    ]);
+    // 立即揭幕；卡片和 3D 各自等到完整可用后才淡入。
     gsap.to(routeVeil, {
       yPercent: -100,
       duration: 1.05,

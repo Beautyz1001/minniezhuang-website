@@ -240,11 +240,15 @@ html.works-intro-armed .television-copy > * {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
   object-fit: cover;
   filter: saturate(.92) brightness(.48);
   transform: scale(1.04);
-  transition: filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
+  transition: opacity .28s ease, filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
 }
+
+/* 路由页不再为全部封面解码而停住；每一张只在自己解码完成后再显现。 */
+.gallery-card-image.is-ready { opacity: 1; }
 
 .gallery-card.is-active .gallery-card-image {
   filter: saturate(1) brightness(.78);

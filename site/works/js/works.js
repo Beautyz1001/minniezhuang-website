@@ -65,6 +65,13 @@
     card.setAttribute('aria-label', `查看 ${project.name} 项目详情`);
     card.style.setProperty('--card-rgb', project.previewColor.css);
     card.innerHTML = `<img class="gallery-card-image" src="${project.cover}" alt="" draggable="false">`;
+    const cover = card.querySelector('.gallery-card-image');
+    const revealCover = () => {
+      if (cover.decode) cover.decode().then(() => cover.classList.add('is-ready')).catch(() => {});
+      else cover.classList.add('is-ready');
+    };
+    if (cover.complete) revealCover();
+    else cover.addEventListener('load', revealCover, { once: true });
     card.addEventListener('click', () => {
       if (galleryDragSuppressClick) { galleryDragSuppressClick = false; return; }
       if (index === currentIndex) openDetail(index);
@@ -274,22 +281,6 @@
     }
   });
 
-  // 从 Home 点 WORKS 跳过来时，遮幕还盖着屏幕——趁这段时间把当前可见的
-  // 画廊封面图解码好、把电视预览模型加载好，揭示时就不会再有"素材还没
-  // 到、揭开了才弹出来"的卡顿。最多等 900ms 兜底，不会无限拖住转场。
-  function preloadVisibleCovers() {
-    const imgs = [...galleryPane.querySelectorAll('.gallery-card-image')];
-    const decodes = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()));
-    return Promise.all(decodes);
-  }
-
-  function waitForRouteContentReady() {
-    return Promise.race([
-      Promise.all([preloadVisibleCovers(), tvReady]),
-      new Promise((resolve) => setTimeout(resolve, 900)),
-    ]);
-  }
-
   /* 画廊页的首次入场：不动卡片的布局或轨道计算，只打开各自既有的视觉层。
      项目切换仍由 updateCopy() 接管，因此进入结束后与原交互完全相同。 */
   async function playWorksIntro() {
@@ -312,9 +303,8 @@
       return;
     }
 
-    // 遮幕挡着的这段等待完全不可见，画面还是全黑，所以只在有遮幕
-    // （路由跳转过来）时才等；直接刷新/访问没有遮幕遮挡，照旧立即播放。
-    if (isRouteArrival) await waitForRouteContentReady();
+    // 页面立即开始入场；每张封面各自等解码完成才淡入，避免整页为慢图
+    // 停住，也不会出现半张作品。
 
     const timeline = gsap.timeline({ defaults: { overwrite: 'auto' }, onComplete: finish })
       .set([siteNav, galleryPane, televisionPane, ...copyParts], { willChange: 'transform,opacity,clip-path' })

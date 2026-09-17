@@ -362,11 +362,15 @@ html.break-route-armed .break-route-veil {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
   object-fit: cover;
   filter: saturate(.92) brightness(.48);
   transform: scale(1.04);
-  transition: filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
+  transition: opacity .28s ease, filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
 }
+
+/* 单张封面解码完才出现，慢网下也不会展示半成品。 */
+.break-gallery-card-image.is-ready { opacity: 1; }
 
 .break-gallery-card.is-active .break-gallery-card-image {
   filter: saturate(1) brightness(.78);

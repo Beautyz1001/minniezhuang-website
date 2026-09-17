@@ -12,7 +12,7 @@
       arrival: 'works',
       scale: 'scaleX',
       origin: 'right center',
-      duration: .85,
+      duration: .45,
       ease: 'power3.inOut',
       prefetch: [
         '../works/works.html',
@@ -28,7 +28,7 @@
       arrival: 'break',
       scale: 'scaleY',
       origin: 'center bottom',
-      duration: .85,
+      duration: .45,
       ease: 'expo.inOut',
       prefetch: [
         '../break/break.html',
