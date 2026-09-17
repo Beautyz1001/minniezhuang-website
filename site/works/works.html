@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORKS</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Gothic+Expanded+One&family=Jaldi:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/works.css">
+<script>
+  (function () {
+    try {
+      if (sessionStorage.getItem('mz-route-arrival') === 'works') {
+        document.documentElement.classList.add('works-route-armed');
+        sessionStorage.removeItem('mz-route-arrival');
+      }
+    } catch (_) {
+      // 受限存储环境直接使用原有 Works 入场。
+    }
+  })();
+  document.documentElement.classList.add('works-intro-armed');
+  setTimeout(function () {
+    document.documentElement.classList.remove('works-intro-armed');
+    document.documentElement.classList.remove('works-route-armed');
+  }, 4000);
+</script>
+</head>
+<body>
+
+<div class="works-route-veil" id="worksRouteVeil" aria-hidden="true"></div>
+
+<nav class="site-nav">
+  <div class="nav-logo">THE ART<br>OF MZ</div>
+  <div class="nav-menu">
+    <button type="button" class="nav-link nav-current active" aria-expanded="false" aria-controls="nav-links">WORKS</button>
+    <ul class="nav-links" id="nav-links">
+      <li class="nav-slot"><a href="../home/index.html" class="nav-link">HOME</a></li>
+      <li class="nav-slot"><a href="../break/break.html" class="nav-link">BREAK</a></li>
+      <li class="nav-slot"><a href="../home/index.html#contact" class="nav-link">ABOUT</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="works-stage" id="worksStage">
+  <section class="works-gallery-pane" aria-label="作品列表">
+    <div class="works-gallery" id="worksGallery"></div>
+  </section>
+
+  <section class="television-pane" id="televisionPane" aria-label="当前作品预览">
+    <canvas class="television-canvas" id="televisionCanvas" aria-hidden="true"></canvas>
+    <div class="television-vignette" aria-hidden="true"></div>
+    <div class="television-copy" id="televisionCopy">
+      <ul class="television-tags" id="televisionTags" aria-label="项目标签"></ul>
+      <h1 class="television-name" id="televisionName" role="button" tabindex="0"></h1>
+      <p class="television-credit" id="televisionCredit"></p>
+    </div>
+  </section>
+</main>
+
+<!-- 不放在 .works-stage 里面：.works-stage 是 position:fixed，会自建一个独立
+     层叠上下文，.works-detail 的 z-index 出不去那个上下文，够不到 .site-nav。
+     放在这里、和 .site-nav 做兄弟节点，两者的 z-index 才能直接比较。 -->
+<section class="works-detail" id="worksDetail" aria-label="项目详情" aria-hidden="true">
+  <!-- 图带 + 文字必须被同一个盒子包住：入场时只驱动这一层，两者才是一整块。
+       关闭按钮和 PREV/NEXT 故意留在外面，它们不参与升起。 -->
+  <div class="works-detail-stage" id="detailStage">
+    <div class="works-detail-pages" id="detailPages"></div>
+    <div class="works-detail-info">
+      <div class="works-detail-name" id="detailName"></div>
+      <div class="works-detail-name-zh" id="detailNameZh"></div>
+      <div class="works-detail-desc" id="detailDesc"></div>
+    </div>
+  </div>
+  <div class="works-detail-links" id="detailLinks"></div>
+  <button class="works-close" id="worksClose" aria-label="关闭项目详情">×</button>
+  <div class="works-detail-nav">
+    <button class="works-nav-btn" id="navPrev" type="button">PREV</button>
+    <button class="works-nav-btn" id="navNext" type="button">NEXT</button>
+  </div>
+</section>
+
+<!-- 点击详情画廊里的图片，放大查看——同样是 .site-nav 的兄弟节点，
+     z-index 要盖过 .works-detail（60），见 works.css。 -->
+<div class="works-lightbox" id="worksLightbox" aria-hidden="true">
+  <button class="works-lightbox-close" id="lightboxClose" aria-label="关闭大图">×</button>
+  <div class="works-lightbox-scroll" id="lightboxScroll">
+    <img class="works-lightbox-img" id="lightboxImg" src="" alt="">
+  </div>
+</div>
+
+<script src="js/lib/gsap.min.js"></script>
+<!-- Works → Break 的离场遮幕，逻辑和 Home 共用，参数保持一致。 -->
+<script src="../shared/js/route-transition.js"></script>
+<script src="js/works-route-transition.js"></script>
+<script src="js/works-data.js"></script>
+<script src="js/works-nav.js"></script>
+<script src="js/works.js?v=works-route-transition-1"></script>
+</body>
+</html>

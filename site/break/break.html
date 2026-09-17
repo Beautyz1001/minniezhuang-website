@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BREAK</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Gothic+Expanded+One&family=Jaldi:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/break.css?v=break-route-transition-1">
+<script>
+  (function () {
+    try {
+      if (sessionStorage.getItem('mz-route-arrival') === 'break') {
+        document.documentElement.classList.add('break-route-armed');
+        sessionStorage.removeItem('mz-route-arrival');
+      }
+    } catch (_) {
+      // 受限存储环境直接显示 Break。
+    }
+  })();
+  setTimeout(function () {
+    document.documentElement.classList.remove('break-route-armed');
+  }, 4000);
+</script>
+</head>
+<body>
+
+<div class="break-route-veil" id="breakRouteVeil" aria-hidden="true"></div>
+
+<nav class="site-nav">
+  <div class="nav-logo">THE ART<br>OF MZ</div>
+  <div class="nav-menu">
+    <button type="button" class="nav-link nav-current active" aria-expanded="false" aria-controls="nav-links">BREAK</button>
+    <ul class="nav-links" id="nav-links">
+      <li class="nav-slot"><a href="../home/index.html" class="nav-link">HOME</a></li>
+      <li class="nav-slot"><a href="../works/works.html" class="nav-link">WORKS</a></li>
+      <li class="nav-slot"><a href="../home/index.html#contact" class="nav-link">ABOUT</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="break-stage" id="breakStage">
+  <section class="break-model-pane" id="breakModelPane" aria-label="画架、凳子与落地灯三维模型预览">
+    <canvas class="break-model-canvas" id="breakModelCanvas" aria-hidden="true"></canvas>
+    <p class="break-model-status" id="breakModelStatus" role="status">LOADING MODEL</p>
+    <div class="break-model-copy" id="breakModelCopy">
+      <ul class="break-model-tags" id="breakModelTags" aria-label="项目标签"></ul>
+      <h1 class="break-model-name" id="breakModelName" role="button" tabindex="0"></h1>
+      <p class="break-model-credit" id="breakModelCredit"></p>
+    </div>
+  </section>
+
+  <section class="break-gallery-pane" aria-label="项目列表">
+    <div class="break-gallery" id="breakGallery" tabindex="0" aria-label="滚动以切换项目"></div>
+  </section>
+</main>
+
+<!-- 不放在 .break-stage 里面：.break-stage 是 position:fixed，会自建一个独立
+     层叠上下文，.break-detail 的 z-index 出不去那个上下文，够不到 .site-nav。
+     放在这里、和 .site-nav 做兄弟节点，两者的 z-index 才能直接比较。
+     （和 site/works/works.html 的详情弹层同一套理由，见那边的注释。） -->
+<section class="break-detail" id="breakDetail" aria-label="项目详情" aria-hidden="true">
+  <div class="break-detail-stage" id="breakDetailStage">
+    <div class="break-detail-pages" id="breakDetailPages"></div>
+    <div class="break-detail-info">
+      <div class="break-detail-name" id="breakDetailName"></div>
+      <div class="break-detail-desc" id="breakDetailDesc"></div>
+    </div>
+  </div>
+  <div class="break-detail-links" id="breakDetailLinks"></div>
+  <button class="break-close" id="breakClose" type="button" aria-label="关闭项目详情">×</button>
+  <div class="break-detail-nav">
+    <button class="break-nav-btn" id="breakNavPrev" type="button">PREV</button>
+    <button class="break-nav-btn" id="breakNavNext" type="button">NEXT</button>
+  </div>
+</section>
+
+<script src="js/break-nav.js?v=works-parity-1"></script>
+<script src="../works/js/lib/gsap.min.js"></script>
+<!-- Break → Works 的离场遮幕，逻辑和 Home 共用，参数保持一致。 -->
+<script src="../shared/js/route-transition.js"></script>
+<script src="js/break-route-transition.js"></script>
+<script src="js/break-data.js?v=works-parity-1"></script>
+<script type="module" src="js/break.js?v=break-route-transition-1"></script>
+</body>
+</html>

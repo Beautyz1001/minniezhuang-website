@@ -1,0 +1,4579 @@
+/* ===== HOMEPAGE PORTAL — 独立样式，不影响主站 style.css =====
+
+   文件导航：
+   1. 设计令牌与导航      2. Hero / CSS 降级层      3. Showreel 与 Works
+   4. Studio / Footer      5. 响应式                 6. 开场与标题跟焦
+
+   3D 的性能规则及视觉参数不在本文件，见 ../js/homepage-portal-3d.js
+   施工版本，baseline 是 css/homepage-demo.css（保持只读）。
+   与 baseline 的唯一差别：删掉了近场辉光 .door-bloom
+   （那是门内画面的模糊副本，用硬矩形裁切，门一放大就是个规整的长方形）。
+   门洞的尺寸、位置、滚动节奏全部与 baseline 一致。 */
+
+/*
+  性能原则（这版重构的核心）：
+  1. 门的放大用 clip-path 裁切，不改 width/height —— 不触发重排
+  2. 所有 blur 值都是固定的，滚动时只改 opacity/transform —— 浏览器不用每帧重算滤镜
+  3. 光池和雾用「柔和的渐变」本身实现柔边，不再套 blur() 滤镜
+*/
+
+:root {
+  --bg-purple: #15021a;
+  --red: #e00000;
+  --red-bright: #ff2a12;
+  --white: #f2efec;
+
+  /* --- 可调参数（对照 HOMEPAGE.png 设定） --- */
+  --edge: clamp(20px, 3.96vw, 64px);  /* 全站左右统一边距，1440 宽时 = 57px */
+  --gap-eyebrow: 0.9vw;               /* 小字基线 → 大标题字母顶部的距离，1440 时 ≈ 13px */
+  --gap-bottom: 1.9vw;                /* 大标题基线 → 视口底部的距离，1440 时 ≈ 27px */
+  /* 主 slogan 与 Works slogan 共用字号；改这里会同时更新两处。 */
+  --slogan-size: clamp(44px, 5.2vw, 88px);
+
+  /* ===== 字级表（2026-09-09 建立）=====================================
+     用户："字体很花、很乱、没有层级。"实测下来全页有 **27 种**不同写法，
+     其中 17/17.28、16/16.128、12/12.6、30/30.72 四组肉眼分不出——
+     等于白白多出四档；小标签一个角色有五种写法，其中一种还换了字族。
+
+     下面五档**不是新拍的数**，全部是已经定稿过的值：
+     项目标题 63、View all 38.4、slogan 24、正文 17、标签 12（视口 1536 时）。
+     这次做的事情是把其余那些尴尬的数往这五档里归。
+
+     ⚠ 规矩：**以后写字号一律引用这几个变量，不要再直接写数字。**
+       要新增一档之前先问：它和现有哪一档差得出来？差不出来就别加。
+     ⚠ 上面两档是流体的（跟视口缩放），下面两档是固定的——
+       大字要跟着版面走，小字跟着走会在窄屏糊掉。这是故意的，不是漏写。 */
+  --t-display: clamp(38px, 4.1vw, 66px);      /* 1536 时 63px — 章节 / 项目标题（Bebas） */
+  --t-lead:    clamp(24px, 2.5vw, 44px);      /* 1536 时 38.4px — 大链接 / 段落引言 */
+  --t-big:     clamp(17px, 1.5625vw, 24px);   /* 1536 时 24px — 大句子（slogan 一类） */
+  --t-body:    17px;                          /* 正文：项目简介、公司职称、说明文字 */
+  --t-label:   12px;                          /* 标签、导航：全大写小字 */
+  --ls-label:  .045em;                        /* 标签档专用字距，等于原来的 12px/0.54px */
+  /* 视频底边 → Works 内容起点（`.home-works` 的 padding-top）的呼吸距离。
+     ⚠ 2026-09-09 起不再兼管黑幕：以前这一个变量同时管"黑幕渐变起点"和
+     "Works 内容起点"，用户只要求把黑幕往上调、Works 不要跟着动，
+     所以黑幕改用下面单独的 `--curtain-entry-gap`，这个变量现在**只管**
+     `.home-works` 的 padding-top，改这个不会再影响黑幕位置。 */
+  --inner-entry-gap: 90px;
+  /* 视频底边 → 黑色渐变起点（`.inner-world` 的 margin-top）的呼吸距离，
+     由 `js/homepage-portal-scroll.js` 的 `syncShowreelExitGap()` 读取。
+     2026-09-09：原来和 `--inner-entry-gap` 共用一个数（90px），用户说黑幕
+     "开始渐变的地方靠后了"，要求往上调 100px、且不能带动 WORKS 内容一起挪，
+     所以拆成独立变量：90 − 100 = -10px。
+     ⚠ 这是负值，意味着 `.inner-world`（黑幕渐变的起点）会略微探到视频
+     最终落点的**上方**一点点，而不是留在它下面——这是用户要的效果
+     （渐变提前开始），不是笔误。 */
+  --curtain-entry-gap: -10px;
+  /* Works 动画文字滚动吸顶后的高度，比入场位置略高。 */
+  --works-sticky-top: 40px;
+  /* Works 动效字与 slogan 同步下移的视觉偏移。 */
+  --works-heading-offset: 18px;
+
+  /* 下面这几个由 js/homepage-demo.js 实测后写入，不要手填数字：
+     --title-size      标题字号（正好铺满左右边距）
+     --title-ink-left  M 左边那块「字体自带的空白」宽度
+     --eyebrow-ink-left 小字 A 左边的同类空白
+     --title-cap-top   标题行盒顶 → 字母顶部
+     --title-base-up   标题行盒底 → 基线
+     --eyebrow-base-up 小字行盒底 → 基线 */
+
+  --door-x: 50.1%;       /* 门的水平位置 */
+  --door-top: 41.6%;     /* 门的垂直位置 */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { background: #000; color: var(--white); }
+
+body {
+  font-family: 'Jaldi', sans-serif;
+  overflow-x: hidden;
+  /* 文本不应误读为可编辑内容；可点击项目各自保留 pointer / VIEW / drag 提示。 */
+  cursor: default;
+}
+
+/* ---------- 顶部导航 ---------- */
+
+.site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 27px var(--edge);
+  pointer-events: none;
+  /* 必须放在 fixed 导航这一层：子文字若各自在这里的层叠上下文内混合，
+     看不到页面底图。整组以 difference 与底下的 Hero / 图片混合，透明区域不改变画面。 */
+  mix-blend-mode: difference;
+}
+
+.nav-logo {
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  /* 保持品牌红；difference 会在不同底图上将它自动推向深红或互补色。 */
+  color: var(--red);
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+}
+
+/* 收起式菜单（2026-09-09 改，形式照参考站 noth.in 的 MENU）
+   ------------------------------------------------------------------
+   收起时只露出当前页那一项；鼠标移上来，其余三项从各自的遮挡里**依次滑出**。
+
+   参考站实测（视口 1536）：每个词初始被下推整整一行高、被上面的框裁掉——
+   **不是淡入，是从遮挡里滑出来的**；三个词依次开始、**间隔 80ms**，
+   单个约 0.5s，起步极快、尾巴很长地停住。
+   ⚠ 它用的是 GSAP 的 expo.out，CSS 里做不到一模一样。这里用站内已经在用的
+   `cubic-bezier(.16,1,.3,1)`，**是近似值，不是量到的原值**。
+
+   开关只有一个数：`--nav-open`（0 收起 / 1 展开）。
+   鼠标设备靠 `:hover` 把它置 1，触屏靠 JS 加 `.is-open` 置 1。
+   **两条通路只在这一处分叉**，下面所有效果都只读这一个数，不会各走各的。 */
+.nav-menu {
+  --nav-open: 0;
+  position: relative;
+  /* ⚠ 行高必须全组统一，否则四行的间距不齐。
+     Jaldi 的默认行高约 1.69em，而下面那一列是 1.25em——不统一的话，
+     实测 HOME→WORKS 是 22.9px、其余两格是 18.3px，第一格明显松一档，
+     参考站那四行是等距的。 */
+  line-height: 1.25;
+  /* ⚠ 字号必须写在这里。不写的话它继承 body 的 16px，
+     两个后果：① 这个盒子的行框按 16px 撑，比字高一截，字会被顶下去；
+     ② 下面那些 em 单位全部按 16px 算，比例就错了。 */
+  font-size: var(--t-label);
+  /* 原来是 5px（写在 .nav-links 上）。改版前那一行的盒子是 22px 高（字体默认行高），
+     现在是 12px × 1.25 = 15px，**盒子矮了 7px，字就会往上跳一半**，
+     所以补 3.5px 回去——**目的是让 HOME 这行字停在改版前的那个像素位置**
+     （实测基线 homepage-demo.html：字的中心在 y=43）。
+     ⚠ 这个数和字号绑死：`5px + (22 − 字号 × 1.25) ÷ 2`。
+     字号从 13 收到 12 时这里就从 7.875 改成了 8.5——**以后动字号必须重算这一个数**。 */
+  margin-top: 8.5px;
+  /* 常驻那一行和下面那一列右对齐到同一条线（照参考站）。 */
+  text-align: right;
+  pointer-events: auto;
+}
+
+/* 常驻的那一行 = 当前页。button 的默认外观要全部抹掉，只留 .nav-link 的字。 */
+.nav-current {
+  display: inline-block;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+  /* ⚠ 必须显式写。浏览器给 button 硬写了 `line-height: normal`，
+     它**不继承** .nav-menu 上那个 1.25，不写这一行盒子仍是 22px，
+     字会往下掉 4px、第一格间距也回不到 18。 */
+  line-height: 1.25;
+}
+
+/* ⚠ 绝对定位是这套效果的地基：这一列不占布局，
+   所以展开收起时导航行的高度不变，页面上其他东西一个像素都不动。 */
+.nav-links {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .13em;            /* 参考站是 1.536 / 11.52 = .133em */
+  /* 和 gap 同值。作用是让这一列的框**紧贴**常驻行——
+     中间只要留一条缝，鼠标从上往下走就会掉出去，菜单会闪一下收起来。 */
+  padding: .13em 0 0;
+  margin: 0;
+  /* 收起时整列不吃鼠标事件，否则首屏上会多出一块看不见的挡板，
+     把底下大标题的跟焦挡掉。 */
+  pointer-events: none;
+}
+
+/* 遮挡框：词被推到框底下，靠这一层裁掉。
+   ⚠ 左边多留 10px 再用负 margin 补回来——不这样做，
+   会把 -8px 处那道红竖线连着一起切掉。 */
+.nav-slot {
+  overflow: hidden;
+  padding-left: 10px;
+  margin-left: -10px;
+  line-height: 1.25;
+}
+
+/* ⚠ 必须是 block。inline-block 的基线会在框底下多留一点行距，
+   位移 100% 也清不干净，收起时会露出一条字脚。 */
+.nav-slot .nav-link {
+  display: block;
+  transform: translateY(calc((1 - var(--nav-open)) * 100%));
+  transition:
+    transform .5s cubic-bezier(.16, 1, .3, 1),
+    opacity .42s cubic-bezier(.16, 1, .3, 1);
+}
+
+/* 依次滑出，间隔 80ms（实测自参考站）。
+   ⚠ 只挂在展开态上：收回时不排队、也快一档（.3s，见下面），
+   和这个导航原有的"退场比进场快一档"是同一条原则。 */
+.nav-menu:hover .nav-slot:nth-child(2) .nav-link,
+.nav-menu:focus-within .nav-slot:nth-child(2) .nav-link,
+.nav-menu.is-open .nav-slot:nth-child(2) .nav-link { transition-delay: 80ms; }
+
+.nav-menu:hover .nav-slot:nth-child(3) .nav-link,
+.nav-menu:focus-within .nav-slot:nth-child(3) .nav-link,
+.nav-menu.is-open .nav-slot:nth-child(3) .nav-link { transition-delay: 160ms; }
+
+.nav-menu:not(:hover):not(:focus-within):not(.is-open) .nav-slot .nav-link {
+  transition-duration: .3s;
+  transition-delay: 0ms;
+}
+
+/* 展开的开关。触屏和键盘不受 hover 媒体查询限制，鼠标那条受。 */
+.nav-menu.is-open,
+.nav-menu:focus-within { --nav-open: 1; }
+
+.nav-menu.is-open .nav-links,
+.nav-menu:focus-within .nav-links { pointer-events: auto; }
+
+/* 导航三态（2026-09-08 重做）
+   原来三态之间只有"颜色变一下"这一个动作：默认灰白 / hover 变亮红 / 选中加粗。
+   PITFALLS [2026-09-05] 已经记过——这个站的 hover **不要走"改颜色、提亮度"这条路**，
+   那是控件式的通用效果。这里改用站内已有的两条语言：
+
+   1. **镜头对焦**：鼠标进导航区，没被指到的那几项一起暗下去，被指的那项亮到满。
+      变的不是"某个按钮亮了"，是**注意力被引导**——这是镜头在做的事，不是控件在做的事。
+   2. **一条硬边细线从中心往两侧展开**：和门洞对称、标题从中间展开、
+      加载条从中心长开是同一套语言。硬边不羽化（PITFALLS [2026-09-05] 第二条：用户要硬边）。
+      选中项的线**常驻满宽**——"光只存在于它已经到达的地方"。
+
+   两条都不碰字的颜色亮度当主角，也没有任何辉光。 */
+.nav-link {
+  position: relative;
+  display: inline-block;
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  color: #d8d5d6;
+  text-decoration: none;
+  /* 尺寸按参考站 noth.in 的顶栏实测值靠拢（2026-09-08，用户："换成和参考网站一样的、
+     比较小那种"）：它是 14px / 字重 500 / 字距 normal。2026-09-09 用户另定：
+     顶部导航改用站内品牌字体，尺寸度量维持不动。 */
+  /* 字级表 4 档（2026-09-09）。原来是 13px / 字距 0.3px（= .023em）——
+     它和项目标签（12px / .045em）是同一类东西：全大写的小字记号。
+     差 1px 读不出层级，只多出一档。字距也一并归到标签档。 */
+  font-size: var(--t-label);
+  font-weight: 400;
+  letter-spacing: var(--ls-label);
+  /* 默认态压掉一档（第二版从 .82 再压到 .62）。满亮的白没有余量，hover 再亮
+     就只能靠加辉光；而且导航是常驻在画面上的东西，它安静地待在背景里才叫克制。
+     留出这一档，"亮起来"才有地方可去。 */
+  opacity: .62;
+  transition: opacity .42s cubic-bezier(.16, 1, .3, 1);
+}
+
+/* 状态记号：一道贴着字左侧的极细竖光。
+   ⚠ 第一版这里是**横在字底下的下划线**，用户看了说"横线隔得太远、
+   不像一个整体""不够高级，算是一个比较合格的页签栏"。根因不是距离：
+   **下划线本身就是"页签栏"的通用签名**，和 PITFALLS [2026-09-05] 里
+   "轨道、方角、左起点都是控件的签名"是同一件事——调它的位置救不了它。
+   （去参考站 noth.in 看过：它的顶栏连页签都没有了，只剩 logo + 一个 menu，
+   14px、字重 500、**一条装饰线都没有**，唯一的状态记号是个 5.8px 的小方块。
+   它的高级来自"不添加多余的物体"。）
+
+   换成竖的，有三个理由：
+   1. **它就是门洞的缩影**——首屏那道门是一个竖着的洋红光。这是这个站自己的记号，
+      不是任何模板里的下划线。
+   2. **和字等高、紧贴字侧（-9px）**，读作同一个单元，不再是"下面另有一个东西"。
+   3. 展开方向从中心往上下（`scaleY`，原点居中），和门洞对称、标题从中间展开、
+      加载条从中心长开是同一套语言。
+
+   高度用 em 跟着字号走，位置绝对定位挂在盒子外——**不能用 padding 撑**，
+   导航是 fixed 的一行 flex，撑高盒子会把整行的垂直位置带偏。 */
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+/* 选中态：红字 + 加粗 + 竖线常驻。
+   ⚠ 上一版我把加粗去掉了（理由：Jaldi 700 和 400 字宽不同、四个词粗细不齐），
+   2026-09-08 用户指名要加回来。字宽确实会变，但选中态是**静态**的——
+   页面一加载就定了，不随鼠标变化，所以不会有任何抖动，只是换页时这一项宽一点。 */
+.nav-link.active {
+  color: var(--red);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.nav-link.active::after { transform: scaleY(1); }
+
+/* 展开的记号：当前项旁边那道红竖光**原地长高一档**（.82em → 1.5em），
+   收起时缩回去。收起态本来就有这道光，它就是"这里能展开"的提示。
+
+   ⚠ 为什么不是"顺着开出来的那一列往下长"：这一列是**右对齐**的，
+   每个词的左边缘 x 都不一样（WORKS 比 HOME 宽，左边起点更靠左），
+   竖线往下伸会正好压在下面那个词的字上。原地长高没有这个问题。
+   高度和 margin-top 是绑死的一对（margin-top = −高度/2），改一个必须改另一个，
+   否则光不再以字的中线为中心，会偏上或偏下。 */
+.nav-current::after {
+  height: calc(.82em + var(--nav-open) * .68em);
+  margin-top: calc(-.41em - var(--nav-open) * .34em);
+  transition:
+    height .5s cubic-bezier(.16, 1, .3, 1),
+    margin-top .5s cubic-bezier(.16, 1, .3, 1),
+    transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+/* 鼠标设备才有这一套。触屏没有 hover，整组变暗会永远暗着回不来。 */
+@media (hover: hover) and (pointer: fine) {
+  /* 鼠标一进这块区域，菜单就展开。触屏走 .is-open 那条路，见上面。 */
+  .nav-menu:hover { --nav-open: 1; }
+  .nav-menu:hover .nav-links { pointer-events: auto; }
+
+  /* 对焦（2026-09-09 用户确认保留）：鼠标一进导航区，全组先退到背景里……
+     ⚠ 选择器从 .nav-links 换成 .nav-menu，因为当前页那一项现在在列表**外面**，
+     不换的话它不会跟着暗，四项就不是一组了。 */
+  .nav-menu:hover .nav-link { opacity: .3; }
+  /* ……被指的那一项浮上来。退场比进场快一档（.42s → .3s），
+     手离开时画面要利落地回到常态，慢慢褪反而拖沓。 */
+  .nav-menu .nav-link:hover,
+  .nav-menu .nav-link:focus-visible {
+    opacity: 1;
+    transition-duration: .3s;
+  }
+  .nav-link:hover::after,
+  .nav-link:focus-visible::after { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link,
+  .nav-link::after,
+  .nav-slot .nav-link,
+  .nav-current::after { transition: none; }
+}
+
+/* ---------- 滚动容器 ---------- */
+
+/* 前 220vh 仍是原来的门洞推进；退出 showreel 时再多留一段红色背景，
+   让小视频 / 小字和 Works 黑底之间有参考图中的清晰间距。 */
+.pin-wrap {
+  --showreel-exit-gap: clamp(72px, 7.2svh, 112px);
+  position: relative;
+  height: calc(910vh + var(--showreel-exit-gap));
+}
+
+.hero {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+/* ---------- 背景：黑 - 紫 - 黑 ---------- */
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(180deg, #000000 0%, #09010e 32%, #09010e 60%, #000000 100%);
+}
+
+.bg-purple {
+  position: absolute;
+  inset: -10% 0;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(21, 2, 26, 0.35) 18%,
+    var(--bg-purple) 42%,
+    rgba(21, 2, 26, 0.45) 68%,
+    transparent 100%
+  );
+  /* 不用写 will-change：下面这条一直在跑的动画本身就会让浏览器单独分层 */
+  animation: purple-breathe 16s ease-in-out infinite;
+}
+
+@keyframes purple-breathe {
+  0%, 100% { opacity: 0.45; transform: translate3d(0, 0, 0); }
+  50%      { opacity: 1;    transform: translate3d(0, -2.5%, 0); }
+}
+
+/* 噪点：只做 transform 位移，走合成层，几乎不耗性能 */
+.hero-bg::after {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.045;
+  animation: grain 8s steps(6) infinite;
+}
+
+@keyframes grain {
+  0%,100% { transform: translate3d(0,0,0); }
+  20% { transform: translate3d(-2%, 1.5%, 0); }
+  40% { transform: translate3d(1.5%, -2%, 0); }
+  60% { transform: translate3d(-1.5%, -1%, 0); }
+  80% { transform: translate3d(2%, 1%, 0); }
+}
+
+/* ---------- 地面光池 ----------
+   这是从门里射出来的光，所以它和门是**同一束光**，必须严格咬合：
+     · 光斑的上边 = 门槛（门的下沿），一个像素都不能错开
+     · 上边的宽度 = 门的宽度，光不可能比门口还宽
+     · 往下（往镜头方向）按透视张开，越远越宽越淡
+   下面这些坐标全部由 JS 按门的实时位置算出来，CSS 里的数字只是初始值。
+   柔边由渐变和 mask 完成，不套 blur 滤镜，所以很轻。 */
+
+.light-pool {
+  position: absolute;
+  left: 0;
+  top: var(--pool-top, 46.4%);
+  width: 100%;
+  height: calc(100% - var(--pool-top, 46.4%));
+  z-index: 1;
+  /* 一个梯形：上边两点贴着门槛的左右沿，下边两点是透视张开后的位置 */
+  clip-path: polygon(
+    var(--pool-x1, 49.3%) 0%,
+    var(--pool-x2, 50.9%) 0%,
+    var(--pool-x3, 78%) 100%,
+    var(--pool-x4, 22%) 100%);
+  background:
+    /* 门槛处最亮的落地热点，横向宽度跟着门走 */
+    radial-gradient(var(--pool-hot-w, 8%) 24% at var(--door-x) 0%,
+      rgba(255, 152, 116, 0.42) 0%,
+      rgba(232, 74, 42, 0.20) 45%,
+      transparent 80%),
+    /* 随距离衰减的主体 */
+    linear-gradient(to bottom,
+      rgba(214, 58, 32, 0.32) 0%,
+      rgba(170, 22, 14, 0.19) 24%,
+      rgba(118, 5, 8, 0.09) 52%,
+      rgba(62, 0, 6, 0.03) 80%,
+      transparent 100%);
+  /* 左右两侧羽化成半影，看不到任何几何直边。
+     羽化的范围以门的水平位置为中心，跟着光斑一起张开 */
+  /* 注意：--pool-fade 由 JS 写在 #hero 上靠继承传下来，
+     所以这里只能写成 var(...) 的兜底值，不能在本元素上再声明一次——
+     元素自己声明的变量会盖掉继承来的那个 */
+  --pool-mask: linear-gradient(90deg,
+    transparent     calc(var(--door-x) - var(--pool-fade, 34%)),
+    rgba(0,0,0,.5)  calc(var(--door-x) - var(--pool-fade, 34%) * 0.62),
+    #000            calc(var(--door-x) - var(--pool-fade, 34%) * 0.3),
+    #000            calc(var(--door-x) + var(--pool-fade, 34%) * 0.3),
+    rgba(0,0,0,.5)  calc(var(--door-x) + var(--pool-fade, 34%) * 0.62),
+    transparent     calc(var(--door-x) + var(--pool-fade, 34%)));
+  -webkit-mask-image: var(--pool-mask);
+          mask-image: var(--pool-mask);
+  opacity: var(--pool-opacity, 1);
+}
+
+
+/* ---------- 远场光晕 ----------
+   真实的灯光不是「一个亮圆」，而是一条衰减曲线：
+   紧贴光源的地方掉得非常快，但很淡的余光会拖得很远。
+   所以这里用多段渐变，中心偏暖白（红光过曝时的样子），
+   往外迅速转红、转暗红，最后拖一条几乎看不见的长尾。 */
+
+.door-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    var(--glow-w, 7%) var(--glow-h, 15%) at var(--door-x) var(--door-top),
+    rgba(238, 126, 210, 0.32) 0%,
+    rgba(206, 74, 181, 0.20) 12%,
+    rgba(158, 38, 142, 0.11) 26%,
+    rgba(110, 18, 98, 0.055) 44%,
+    rgba(68, 8, 62, 0.025) 64%,
+    rgba(34, 0, 32, 0.008) 82%,
+    transparent 100%
+  );
+  opacity: var(--glow-opacity, 1);
+}
+
+/* ---------- 3D 门洞（Three.js）----------
+   canvas 占的位置和 CSS 版的 .door 完全一样（z-index: 2），背景透明。
+   只有当 3D 真的初始化成功、给 .hero 加上 .portal-3d 之后，
+   canvas 才显示、CSS 版的门才隐藏。所以显卡不给力时页面会安静地退回原样。
+   想手动两版对比：控制台敲 __portal3D.off() / __portal3D.on()，
+   或者在网址后面加 ?3d=0。 */
+
+#portal-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+}
+
+.hero.portal-3d #portal-canvas { display: block; }
+.hero.portal-3d .door          { display: none; }
+
+/* 地面光池：以前是手画的一个梯形，现在由 3D 里真的灯打在真的地上照出来。
+   （门口那圈辉光 .door-glow 还留着，等 Bloom 做好了再一起换掉。） */
+.hero.portal-3d .light-pool    { display: none; }
+
+/* Three.js 已接管门口辉光：旧 CSS 是一个覆盖门洞中心的圆形渐变，
+   不具备“光从四边溢出”的几何逻辑，3D 模式下必须关闭，避免两种光叠在一起。 */
+.hero.portal-3d .door-glow     { display: none; }
+/* 3D 模式下，雾由同一张 portal canvas 渲染；旧 CSS 雾只留作降级。 */
+.hero.portal-3d .fog           { display: none; }
+
+
+/* ---------- 门：通往里面那个空间的通道口 ----------
+
+   ⚠️ 下面这一整套是 CSS 版本，现已被上面的 canvas 接管（.portal-3d 时隐藏）。
+      保留着不删，是为了随时能一键回滚、以及做逐像素对比。
+
+   Phase 3.1：门从「一张会放大的平面图」变成「一个开在空间里的洞」。
+
+   打个比方：以前是把一张照片贴在玻璃上，然后慢慢放大照片；
+   现在是在墙上挖了一个洞（.door），洞后面隔着一段距离才是那个房间
+   （.door-interior）。镜头往前走的时候，洞口和房间因为**离镜头远近不同**，
+   涨大的速度不一样——这点差别就是"纵深感"的来源。
+
+   .door 自己就是这一小段空间的「相机」：
+     · perspective        = 镜头到门这个平面的距离（由 camera.z 实时给出）
+     · perspective-origin = 灭点，钉在门口附近，所以房间是朝着门口退进去的，
+                            而不是朝着屏幕正中退进去
+   perspective 必须写在 .door 自己身上、而不是它的父元素上：
+   clip-path 会把父元素的 3D 空间压平，写在父元素上的话孩子的 translateZ 就失效了。
+
+   灭点的水平位置由 JS 算好写成 --pivot-x（见 SPACE.OFF_X）。
+   perspective-origin 和 transform-origin 必须钉在同一个点上，
+   否则末尾那个补偿缩放会把门内世界推歪。 */
+
+.door {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /* 用裁切来"开门"，而不是改宽高——不触发重排，滚动才不卡。 */
+  clip-path: inset(var(--clip-t, 37%) var(--clip-r, 49%) var(--clip-b, 53%) var(--clip-l, 49%));
+  /* 这一层的"镜头"：距离由 JS 从 camera.z 推出来 */
+  perspective: var(--cam-depth, 2400px);
+  perspective-origin: var(--pivot-x, 41.1%) var(--door-top);
+}
+
+/* 门内的世界：整体被推到门洞后面 --interior-z 那么远的地方。
+   往后推会让它在透视里变小，所以再乘一个固定的 --interior-scale 补回来——
+   补偿量是按「镜头贴到门口那一刻」标定的，也就是滚动到底时的构图
+   与 Phase 2 完全一致；差异只发生在前半段，而那时门洞还只是一道细缝。 */
+.door-interior {
+  position: absolute;
+  inset: 0;
+  transform:
+    translateZ(var(--interior-z, -200px))
+    scale(var(--interior-scale, 1.22));
+  transform-origin: var(--pivot-x, 41.1%) var(--door-top);
+  /* 门内的灯不太稳，亮度不规则地跳一下（会闪的是门里的光源，不是门洞本身） */
+  animation: flicker 5.5s infinite ease-in-out;
+}
+
+.door-world {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 让画面中心对准门洞中心 */
+  transform: translateY(var(--img-shift, -8.4%)) scale(var(--world-scale, 1.12));
+}
+
+/* 虚焦那张：模糊值固定，永远不重算 */
+.door-world-soft {
+  filter: blur(9px) brightness(0.82);
+}
+
+/* 清晰那张：靠 opacity 交叉淡入，实现"由虚到实"的对焦过程 */
+.door-world-sharp {
+  opacity: var(--focus, 0);
+}
+
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  6%  { opacity: 0.74; }
+  9%  { opacity: 1; }
+  12% { opacity: 0.87; }
+  15% { opacity: 1; }
+  55% { opacity: 0.68; }
+  58% { opacity: 1; }
+  86% { opacity: 0.9; }
+  89% { opacity: 1; }
+}
+
+/* ---------- 体积雾（纯渐变，无滤镜） ---------- */
+
+.fog {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: radial-gradient(
+    58% 50% at var(--door-x) 44%,
+    rgba(190, 78, 50, 0.11) 0%,
+    rgba(150, 32, 20, 0.075) 26%,
+    rgba(88, 4, 14, 0.04) 50%,
+    rgba(40, 0, 8, 0.015) 72%,
+    transparent 88%
+  );
+  opacity: var(--fog-opacity, 1);
+  animation: fog-breathe 13s ease-in-out infinite;
+}
+
+@keyframes fog-breathe {
+  0%, 100% { opacity: 0.82; }
+  50%      { opacity: 1; }
+}
+
+/* ---------- 暗角 ---------- */
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    112% 92% at var(--door-x) 44%,
+    transparent 20%,
+    rgba(0, 0, 0, 0.32) 50%,
+    rgba(0, 0, 0, 0.74) 78%,
+    rgba(0, 0, 0, 0.95) 100%
+  );
+  opacity: var(--vignette-opacity, 1);
+}
+
+/* ---------- 前景文字 ---------- */
+
+/* 文字块贴着视口左下角。左右内边距 = 全站边距，
+   真正的「对齐基准线」就是这个内边距的位置。 */
+
+/*
+  退场时"沉进黑影里"的质感，关键在于**阴影钉在屏幕上，不跟着字走**。
+  想象门口那束光只照亮屏幕中间一条，两边是暗的：
+  字往外滑，滑出光照范围就一点点被黑暗吞掉，靠门的那半始终是亮的。
+  （之前的写法是把渐变画在"字"身上，可字往外跑得比阴影快，
+    留在屏幕上的永远是字的内侧那半——所以看着就是一整块红色滑走，没有褪去感。）
+
+  这条遮罩铺在整个文字层上，它是屏幕坐标系的，字只是从它下面穿过。
+  --ink-e 是暗部往里推进的距离，由 JS 随滚动加大。
+*/
+.hero-text {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 6;
+  padding: 0 var(--edge);
+  --ink-mask: linear-gradient(90deg,
+    transparent      0%,
+    rgba(0,0,0,0.18) calc(var(--ink-e, 0%) * 0.34),
+    rgba(0,0,0,0.62) calc(var(--ink-e, 0%) * 0.68),
+    #000             var(--ink-e, 0%),
+    #000             calc(100% - var(--ink-e, 0%)),
+    rgba(0,0,0,0.62) calc(100% - var(--ink-e, 0%) * 0.68),
+    rgba(0,0,0,0.18) calc(100% - var(--ink-e, 0%) * 0.34),
+    transparent      100%);
+  -webkit-mask-image: var(--ink-mask);
+          mask-image: var(--ink-mask);
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+}
+
+/*
+  为什么要用负的 margin-left：
+  每个字母在字体文件里都自带一圈看不见的空白（像照片的白边）。
+  所以把 <p> 和 <h1> 的「盒子」左边对齐时，肉眼看到的墨迹并没有对齐。
+  JS 量出这层空白有多宽，这里再往左挪回同样的距离，
+  于是 A 的墨迹和 M 的墨迹落在同一条竖线上——不管窗口多宽都成立。
+*/
+.eyebrow {
+  /* 首屏身份副句使用 Jaldi；顶部导航另用品牌字体。 */
+  font-family: 'Jaldi', sans-serif;
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.66vw;                 /* 保持原有字距与整行宽度节奏 */
+  line-height: 1;
+  color: color-mix(in srgb, var(--white) 86%, transparent);
+  white-space: nowrap;
+  margin-left: calc(var(--eyebrow-ink-left, 0px) * -1);
+  /* 让「小字基线 → 标题字母顶部」正好等于 --gap-eyebrow */
+  margin-bottom: calc(var(--gap-eyebrow) - var(--eyebrow-base-up, 0px) - var(--title-cap-top, 0px));
+  opacity: var(--eyebrow-opacity, 1);
+  /* 小字的退场交给 .hero-text 那层屏幕遮罩统一处理，这里只管移动 */
+  /* --eyebrow-y 归滚动动画（横向），--intro-eyebrow-y 归入场动画（纵向），
+     两边各写各的，互不覆盖。入场放完 --intro-eyebrow-y 回到 0，等于没有这一项。 */
+  transform: translate3d(var(--eyebrow-x, 0), var(--intro-eyebrow-y, 0px), 0);
+}
+
+.title-row {
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+  font-size: var(--title-size, 20.6vw);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+  margin-left: calc(var(--title-ink-left, 0px) * -1);
+  /* 让「标题基线 → 视口底部」正好等于 --gap-bottom */
+  margin-bottom: calc(var(--gap-bottom) - var(--title-base-up, 0px));
+}
+
+/* 字本身就是一块干净的红，暗部完全由上面那层屏幕遮罩决定。
+   另外叠一点点整体压暗，让最后阶段残留的字更沉、不会亮得跳出来。 */
+.word {
+  display: inline-block;   /* inline 元素不吃 transform，必须是 inline-block */
+  color: rgb(var(--title-rgb, 224 0 0));
+  will-change: transform;
+}
+
+.word-left  { transform: translate3d(var(--left-x, 0), 0, 0); }
+.word-right { transform: translate3d(var(--right-x, 0), 0, 0); }
+
+
+/* ======================================================================
+   门内首页：Noth.in 首页从 showreel 到 Footer 的结构和滚动比例复刻。
+   首轮只替换为本站字体、红黑深紫色板与本地占位素材。
+   ====================================================================== */
+
+.inner-world {
+  --inner-black: #09070b;
+  /* 透明幕布：顶部轻遮罩，向下约一屏内沉入黑色。 */
+  --curtain-top: rgba(9, 7, 11, .1);
+  --curtain-middle: rgba(9, 7, 11, .48);
+  --curtain-bottom: #09070b;
+  --curtain-middle-stop: 46svh;
+  --curtain-bottom-stop: 700svh;
+  /* 2026-09-07 用户要求 Works 直接铺黑（理由见下面 works-backdrop-active 那段）。
+
+     幕布是「顶部 34svh 内由透明渐变到全黑，之后一路纯黑」：
+     保留这一小段渐变是为了转场不生硬——黑幕是推上来的，不是硬切。
+     34svh 之后完全不透明，这也是首屏可以安心滚走的依据。
+     **别把它改成一刀切的纯色**，那样从门洞进 Works 会变成一次硬切。 */
+  --inner-surface:
+    linear-gradient(to bottom,
+      transparent 0,
+      var(--curtain-bottom) 34svh);
+  --inner-purple: #160b1b;
+  --inner-purple-soft: #24102c;
+  --inner-red: #d11b2d;
+  --inner-white: #f2efec;
+  --inner-muted: rgba(242, 239, 236, .62);
+  position: relative;
+  z-index: 10;
+  /* 让右下视频 / 小字的最终底边与黑色内页保持约 90px 呼吸距离
+     （静态兜底值；实际生效的是 JS `syncShowreelExitGap()` 写的行内
+     `margin-top`，读的是 `--curtain-entry-gap`，会覆盖这条 calc）。 */
+  margin-top: calc(-200svh);
+  /* 2026-09-09：`--curtain-entry-gap` 从 90 改成 -10 之后，`.inner-world`
+     自己的盒子（连同黑色渐变的起点，渐变 0% 永远锚定在它自己顶边）会往上
+     移 100px——但 `.home-works` 是它的第一个子元素、中间没有任何间隔，
+     若不做补偿，`.home-works`（连同 WORKS/slogan/卡片区）会跟着一起往上移
+     100px，而用户明确要求"只改黑幕，不影响 WORKS"。
+     这里补一条 `padding-top: 100px` 精确抵消：`.inner-world` 上移 100，
+     子元素再下移 100，对 `.home-works` 净位移为 0。
+     ⚠ 用 padding 不用 margin：padding 不参与外边距塌陷，不会重蹈
+     PITFALLS [2026-09-09]「父子负 margin 塌陷」的坑。
+     ⚠ 渐变不受这条 padding 影响：`.inner-world` 没有 border，
+     `background-origin` 默认 `padding-box`，padding-box 顶边和 border-box
+     顶边重合，渐变的 0% 仍然锚定在盒子最上沿，不会被这段 padding 往下推。 */
+  padding-top: 100px;
+  overflow: clip;
+  background: var(--inner-surface);
+  /* ⚠ 这里原本写着 `backdrop-filter: blur(var(--curtain-blur))`，
+     但 `--curtain-blur` 整个工作区里从来没有被定义过——这条声明的值是无效的，
+     浏览器直接丢弃，所以实时毛玻璃**其实一直没在跑**。
+     以为存在的那层朦胧感来自下面那张预模糊的红光快照（现已一并去掉）。
+     已删除，避免下次又被它误导。 */
+  color: var(--inner-white);
+}
+
+.inner-world img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ⚠ 2026-09-07：Works 段的红光后景已整体去掉，背景改成纯黑。
+
+   原来这里有三条规则，一起把「首屏的红光留在 Works 底下当背景」这件事做出来：
+     1. `.hero.works-backdrop-active { position: fixed; inset: 0 }`
+        —— 让首屏跳出 pin-wrap 的 sticky 范围，继续留在屏幕上；
+     2. `.inner-world.works-backdrop-active { background: transparent }`
+        —— 让内页自己的黑幕让位，红光才透得出来；
+     3. `.home-works::before` 铺一张预模糊的红光快照 works-backdrop.jpg。
+   三条现已全部删除。
+
+   为什么删（用户 2026-09-07 定的方向，两个理由）：
+   1. **不高级。** 那团模糊红光没有形状、没有方向、也没有光源感，
+      读起来不像「上一个空间的余光」，更像背景没擦干净；而 Works 里的项目图
+      本身就很有颜色，底下再垫一层红雾是两层颜色在打架。
+      黑底是美术馆的做法——墙不发言，让作品自己亮。
+   2. **它是 Works 段卡顿的大头。** 第 1 条把整个首屏（WebGL 门洞、雾、光池、
+      大标题、暗角六层）钉在 Works 底下，每帧重新合成一遍，实测占 16.6ms。
+
+   删掉第 1 条之后 `.hero` 回到它本来的 `position: sticky`：滚出 pin-wrap
+   就自然离开视口，浏览器不再合成它，**不需要任何额外的判断或开关**。
+   这一点很要紧——它和 PITFALLS 里那次「首屏全毁」是两回事：
+   那次是在首屏还看得见的时候去隐藏它；这里是上面盖了一块不透明的黑，
+   下面的东西本来就看不见了。
+
+   转场没有丢：Works 顶部那段「由透明沉入黑」的幕布现在由 `.inner-world`
+   自己的 `--inner-surface` 承担（34svh 内沉到全黑），黑幕照样是推上来的，
+   不是硬切。
+
+   `works-backdrop.jpg` / `works-hero.jpg` 两张快照已不再被引用，文件保留。
+
+   ⚠ works-backdrop-active 这个 class 现在**不再控制任何视觉**（JS 仍在挂它）。
+   往它上面加规则之前先看清楚：实测它从页面一打开（scrollY=0，Works 还在
+   三千多像素之外）就已经挂在 .hero 上了，触发时机是错的。曾经有人往它上面
+   挂了一条「隐藏首屏所有子元素」，结果首页只剩一张红底图。要用它，
+   先换成与滚动位置直接挂钩的纯几何判断。 */
+
+.home-showreel {
+  --inner-red: #d11b2d;
+  --inner-white: #f2efec;
+  position: absolute;
+  z-index: 11;
+  /* 门洞完成后的 background 留约 20svh，slogan 即开始从底部进入。 */
+  top: 240svh;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  height: 390svh;
+  padding: 100svh var(--edge) 0;
+  background: transparent;
+  color: var(--inner-white);
+}
+
+.showreel-copy {
+  margin: 0;
+}
+
+.showreel-copy h2,
+.showreel-copy p,
+.works-intro h2,
+.studio-opening h2,
+.studio-services h3,
+.home-people > h2,
+.glitch-final,
+.footer-cta h2,
+.footer-wordmark {
+  margin: 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+}
+
+.showreel-copy h2 {
+  max-width: none;
+  white-space: nowrap;
+  font-size: var(--slogan-size);
+  line-height: .91;
+  letter-spacing: -.012em;
+  font-kerning: normal;
+  text-rendering: geometricPrecision;
+}
+
+.showreel-copy > p {
+  margin: .12em 0 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: var(--slogan-size);
+  line-height: .91;
+  letter-spacing: -.012em;
+  font-kerning: normal;
+  text-rendering: geometricPrecision;
+  color: var(--inner-red);
+}
+
+/* Showreel 这句改用全站定义的 slogan 字体：与 BREAK 的 STEP ASIDE 同号。 */
+/* ⚠ `max-width` 保持 55ch（原值）。断点在 `WITH` 之后，两行分别是 36 / 52 个字符，
+   都塞得下，不需要放宽。
+   （中间试过断在 WITH 之前，那时第二行 56 字符会被 55ch 再挤折一次、变成三行，
+     所以曾临时改成 62ch；断点挪走后这个理由不存在了，已还原。） */
+.showreel-copy h2.showreel-slogan {
+  max-width: 55ch;
+  white-space: normal;
+  /* 2026-09-15 测试：General Sans 是 Jaldi 平替（参考站字体收费，见 index.html
+     的引入注释）。只试这一处，其余正文仍是 Jaldi，看效果再决定要不要铺开全站。 */
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  /* 2026-09-15：用户要求放大到参考站主宣言的尺度（此前 2026-09-09 试过 96px 被否，
+     这次用户明确表示换字体后再试一次）。只改这一处的字号，不动共享的 --t-big
+     变量，避免连带影响 Works slogan 等其他用到这个变量的句子。 */
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1.15;
+  letter-spacing: normal;
+}
+
+/* 2026-09-15 用户要求去掉红色加粗强调，三个词和其余文字统一成白色。
+   旧的 `--inner-red` + 700 字重 + mix-blend-mode:difference 方案整体删掉，
+   不再需要 `.slogan-accent` 单独设置任何样式，跟随 `.showreel-slogan` 继承色即可。 */
+
+/* ---------- slogan 之前的那一坨碎裂小字（2026-09-09 用户指定）----------
+
+   位置照用户给的示意图量的：左边缘对齐内容线 `--edge`，纵向落在首屏 43% 处。
+   ⚠ 它落在 `.home-showreel` 那 100svh 的上内边距里——那段本来是空的，
+     正好是"slogan 还没上来"的那一段，所以这坨字碎完，slogan 才接着进场。
+     改 `.home-showreel` 的 `padding-top` 会连带影响这里的落点。
+
+   字号 / 行高**和底部空间装置那坨完全一致**（`.install-shard`，参考站线上实测值：
+   1536 视口下 17.28px = 1.125vw，行高 1）。两处是同一种东西，不要各调各的。
+   ⚠ 这里没有复用 `.install-shard` 的类名，是刻意的：那套类归 `setupInstall()` 管，
+     选择器按 `.home-install` 圈定，混用会让两段的触发互相串。 */
+/* ⚠ `fixed` 不是 `absolute`：这坨字**钉在屏幕上不动**（用户 2026-09-09 明确）。
+   镜头推进红色空间后它在固定位置渐显，再滚就在**原地**碎掉——
+   它自始至终不跟着页面走。写成 absolute 的话它会跟着滚上来、从屏幕下方进场，
+   那是另一回事，已被否掉。
+   ⚠ 用了 fixed，出现/消失就只能靠透明度控制（见 setupShowreelShards），
+   而且**祖先链上不能有 transform / filter / will-change**，否则 fixed 会退化成
+   相对那个祖先定位。这里实测是好的，改结构时要重新确认。 */
+/* 外层是铺满视口的固定层，两坨各自在里面绝对定位。
+   ⚠ 层本身不要有背景/边框：它盖着整个视口，`pointer-events: none` 保证不挡点击。 */
+.showreel-shards {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  color: var(--inner-white);
+  pointer-events: none;
+}
+
+.showreel-shard {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  margin: 0;
+  /* 字级表 3 档。原来是 1.125vw（1536 下 17.28px，从参考站量来的原值），
+     和正文的 17px 差 0.28px——看不出来，但就是两档。出处记在这里，值归到正文档。 */
+  font-size: var(--t-body);
+  line-height: 1;
+  /* 字距归零：原来是 .01em（17px 下只有 0.17px，肉眼无差别），
+     但它让正文档在扫描里分裂成两种写法。正文档一律不加字距。 */
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+/* 落点：横向贴内容线 `--edge`（和导航、大标题、图带同一条线）。
+   ⚠ `--x` / `--y` 这层间接是留着的，改这两个值即可定位，其余样式和 JS 都不用动
+   （JS 是按数组写的，查到几个 `.showreel-shard` 就处理几个）。 */
+.showreel-shard { --x: var(--edge); --y: calc(50svh - 34px); }
+
+/* 2026-09-15：左右各一句，单行。字号改回和原来碎裂字坨一致（var(--t-body)，
+   继承自 .showreel-shard，不用再单独设置）。
+   单行文字实际高度按这个小字号、line-height 1 算，居中偏移量比 56px 时小，
+   但差距在个位数像素、肉眼看不出来，沿用 -28px 不再另算。 */
+.showreel-shard-left,
+.showreel-shard-right {
+  --y: calc(50svh - 28px);
+}
+
+.showreel-shard-right {
+  left: auto;
+  right: var(--edge);
+  text-align: right;
+}
+
+.showreel-shard-line {
+  display: block;
+}
+
+/* 逐字碎裂的单位。JS 会把每行拆成 .showreel-shard-char。 */
+.showreel-shard-char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+.showreel-scroll-track {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(var(--edge) * -1);
+  height: 100svh;
+}
+
+.showreel-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #110b14;
+  transform-origin: right bottom;
+  will-change: transform;
+}
+
+/* ⚠ 2026-09-08：这一格换成 <video> 之后必须单独写尺寸。
+   这里原来的 <img> **没有任何尺寸规则**——它一直是按固有尺寸（1536×1024）显示、
+   靠 .showreel-media 的 overflow:hidden 裁切的。视频是 2560×1440，
+   照这个走会把整格撑爆。全站那条 `.inner-world img{…}` 也管不到这里
+   （.home-showreel 在 .inner-world 外面）。
+   和电影院段 `.cinema-screen video` 是同一类补丁，第二次遇到。 */
+.showreel-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.showreel-media::after,
+.work-image-wrap::after,
+.parallax-frame::after,
+.studio-video-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(125deg, rgba(9, 7, 11, .28), transparent 55%, rgba(209, 27, 45, .08));
+}
+
+.showreel-video-stage {
+  position: relative;
+  /* 缩小结束点就是 sticky 释放点，避免最终态留下空滚动。 */
+  height: 225svh;
+  /* 2026-09-15 用户要求固定为 50px（原是响应式 clamp(24px, 3vw, 48px)）。 */
+  margin-top: 65px;
+}
+
+.showreel-video-pin {
+  position: sticky;
+  top: 0;
+  /* 最大态直接使用 slogan 标题的内容宽度，不再额外向外扩展。 */
+  width: 100%;
+  height: 100svh;
+  margin-left: 0;
+}
+
+.showreel-video-pin .showreel-scroll-track {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.showreel-video-pin .showreel-note {
+  --showreel-note-bottom: clamp(24px, 2.7vw, 44px);
+  position: absolute;
+  z-index: 2;
+  /* 与 slogan 标题共用同一组左右边界。 */
+  right: 0;
+  bottom: var(--showreel-note-bottom);
+  left: 0;
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 5fr) 1fr;
+  gap: 20px;
+  padding: 0;
+  /* 2026-09-15：首屏 slogan 单独放大到 56px、算特殊项摘出去了，
+     这一组（Step inside + Images hold a moment）统一改成 20px、
+     两行都用 General Sans，不再和 slogan 共用同一个字号。 */
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: 20px;
+  /* 行高统一：大句子档一律 1.2（原 1.12）。见 2026-09-09 行高归并。 */
+  line-height: 1.2;
+  will-change: transform;
+}
+
+.showreel-note p {
+  margin: 0;
+}
+
+/* `Step inside` 是短标记，独立升到 22px；下方叙述句仍保持原字号。 */
+.showreel-note p:first-child { font-size: 22px; }
+
+.showreel-note p:last-child {
+  grid-column: 2;
+  max-width: 34ch;
+}
+
+.home-works {
+  position: relative;
+  isolation: isolate;
+  /* 旧图带版需要 440svh；现在四卡轮播由 ScrollTrigger 的 pin spacer
+     提供真实滚动行程，保留该最小高度会在 View all 与 BREAK 之间撑出空屏。 */
+  min-height: auto;
+  padding: var(--inner-entry-gap) var(--edge) clamp(130px, 17vw, 260px);
+  background: transparent;
+}
+
+/* ⚠⚠ 2026-09-09：**不要给 `.home-works` 加 `transform`（任何值都不行）。**
+   踩过两版坑，这是第三版才对的：
+
+   ① 第一版 `margin-top: -150px` 直接加在 `.home-works` 上——实测无效。
+      `.home-works` 是 `.inner-world` 的第一个子元素，`.inner-world` 自己
+      有一条 JS 算出来的巨大负 margin-top（抵消门洞 pin 高度，实测
+      -2115.92px），两者的负 margin 发生**外边距塌陷**，取更负的那个，
+      -150 直接被吃掉。**原以为 `.inner-world` 的 `overflow: clip` 能挡住
+      塌陷——实测完全挡不住，这条判断作废。**
+
+   ② 第二版改用 `transform: translateY(-150px)` + `margin-bottom: -150px`——
+      数值层面测出来是对的（间距缩短了 150、内部关系没变、渐变没动），
+      **但会让 `.works-sticky-word` 的 `position: sticky` 整个失效**：
+      CSS 规则是「祖先元素只要有 `transform`，就会给它建立一个新的
+      containing block」，`position: sticky` 的吸顶行为依赖它能一路找到
+      「最近的滚动容器」，中间一旦插一层 transform 建立的 containing block，
+      sticky 就会被限制在那个盒子内部、变得不再跟随视口滚动——
+      表现出来就是用户说的"WORKS 的固定动效没了"。
+      **结论：`position: sticky` 元素的任何祖先都不能有 transform。**
+
+   现在的做法（第三版，同时避开①②两个坑）：
+   把「往上挪 150」拆成两处**各自独立的 margin**，都不碰 `.home-works` 自己：
+   - `.works-sticky-word`（sticky 元素本身）：自己的 margin-top/-bottom
+     各减/加 150（见那条规则），只影响它自己的初始位置，不参与塌陷
+     （它不是 `.home-works` 的唯一子元素，跟父级之间还隔着这个技巧本身的
+     净位移设计，不会跟 `.inner-world` 扯上关系）。
+   - `.works-intro`（sticky 元素的**兄弟**，非 sticky）：直接
+     `margin-top: -150px`。`.home-works` 有非零的 `padding-top`
+     （`var(--inner-entry-gap)`），**父级有 padding 时，子元素的 margin
+     不会跟父级塌陷**，这是最基础、最可靠的 CSS 规则，不会重蹈①的覆辙；
+     且这条 margin 会正常参与文档流，把 `.works-grid` 和后面的
+     Break/VR/Footer 一起带着往上移，不需要再加别的兄弟补偿。
+   两条都不涉及 transform，`.works-sticky-word` 的 sticky 行为完全不受影响。
+   实际的 `margin-top: -150px` 写在下面那条 `.works-intro { display:flex... }`
+   规则里（和已有的 margin-bottom/transform 放一起，避免同一个选择器拆两处）。 */
+
+/* ⚠ 2026-09-07：这里原本有一个 `.home-works::before` 满屏图层，负责铺预模糊的
+   红光快照 works-backdrop.jpg，外加一条由透明沉入黑色的幕布渐变。
+   红光整体去掉之后它没有存在意义了：幕布那一半已经由 `.inner-world` 自己的
+   `--inner-surface` 承担（理由写在上面 .inner-world 那段）。整段已删除。
+   要恢复红光后景，把这里和上面 .inner-world 那三条规则一起还原。 */
+
+.home-works > * {
+  position: relative;
+  z-index: 1;
+}
+
+.works-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--edge);
+  min-height: auto;
+  /* 2026-09-09：把 WORKS+slogan+卡片区当整体上移 150px（缩短和视频的空白），
+     详细原因和踩过的坑见上面 `.home-works` 那条大注释——**别把这条挪回
+     `.home-works` 身上**（会跟父级塌陷）、**别改成 transform**（会破坏
+     `.works-sticky-word` 的 position:sticky）。这里用 margin-top 是安全的：
+     `.home-works` 有非零 padding-top，父子之间不会塌陷。 */
+  margin-top: -150px;
+  /* 标题组自身已被下移，留白要补回这段视觉位移，`120px` 才是屏幕上的实际间距
+     （原来是 200px，2026-09-09 用户要求把第一张卡和右边 slogan 的距离改成 120px）。
+     ⚠ 这个常量是唯一决定该间距的量：`transform: translateY(...)` 和这里的
+     `+ var(--works-heading-offset) + 20px` 互相抵消，slogan 自己再加多少
+     margin-top 也不影响这段间距——slogan 是 intro 里最高的元素，它的 margin-top
+     会同时撑高 intro 本身，而 grid 的位置和 intro 的可见下边缘按同样的量一起往下移，
+     两者相减刚好抵消。以后再要调这段间距，只改这里的 `120px`，不要去动 slogan 的
+     margin-top。 */
+  margin-bottom: calc(120px + var(--works-heading-offset) + 20px);
+  transform: translateY(calc(var(--works-heading-offset) + 20px));
+}
+
+/* 2026-09-09：`Work` 这个标签**在桌面端已被 `W O R K S` 五字母取代**（用户要求
+   「把 works 的初始位置移到 work 那里，替代 work 的位置」），所以隐藏。
+   ⚠ HTML 里的 `<p class="works-index">Work</p>` **没有删**，想要回来把这条去掉即可。
+   ⚠ 用 `display: none` 而不是 `visibility: hidden`：`.works-intro` 是 flex，
+   隐藏的元素不能再占一格，否则 slogan 的位置会变。
+   ⚠ 窄屏仍然显示（见 max-width: 991px 那块）——窄屏不跑 setupWorks()，
+   五字母是静态铺开的，不在这个位置上，标签得留着。
+
+   更早：原来这里有 transform: translateY(50px)（单独下移 50px），
+   用户改要求为「Work 和它自己的 slogan 顶边对齐」时去掉了。 */
+.works-index {
+  display: none;
+  flex: none;
+  margin: 0;
+  font-family: 'Jaldi', sans-serif;
+  font-size: var(--t-big);
+  line-height: 1.2;
+}
+
+.works-intro h2 {
+  max-width: none;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--slogan-size);
+  line-height: .83;
+  letter-spacing: -.03em;
+}
+
+/* 长句沿用全站 slogan 字体，不压缩字号或挤出内容边界。
+
+   2026-09-09（早前）：宽度曾定为 36.8295%，让左边和下面 Break 那句叙述字对齐。
+
+   2026-09-09（本次，用户要求）：右边改成**贴视口边出血**，并整体下移
+   （分三次追加：30px、50px、50px，`margin-top` 现在是 130px）。
+   ⚠ 出血是往右多推 `var(--edge)`（`.home-works` 的 `padding-right`），
+   right 从内容线 1460 变成视口可见区右边（实测 clientWidth 1521，含滚动条的
+   innerWidth 是 1536，出血用的是前者）。
+   ⚠ **副作用（用户未点名，如后续要恢复请回看这条）**：出血把整个框往右推了
+   `--edge`（≈61px），宽度没变，所以**左边跟着一起右移，不再和 Break 那句左对齐**
+   （旧的对齐关系因此打破）。 */
+.works-intro h2.works-slogan {
+  width: 36.8295%;
+  max-width: none;
+  margin-left: auto;
+  margin-right: calc(-1 * var(--edge));
+  margin-top: 75px;
+  white-space: normal;
+  text-align: left;
+  /* 2026-09-15：和首屏 showreel-slogan 一起换成 General Sans 测试，字号不变。 */
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: var(--t-big);
+  /* General Sans 当前只加载 400/500/600/700，没有可稳定使用的 450；
+     此处回到 400，去掉原先 500 带来的粗体感。 */
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: normal;
+}
+
+/* 与 BREAK 的文案共用“逐行从遮罩下推入”的结构；外层裁切，内层只动 transform。 */
+.works-slogan .line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: .14em;
+  margin-bottom: -.14em;
+}
+
+.works-slogan .line-inner {
+  display: block;
+  will-change: transform;
+}
+
+.works-slogan-accent {
+  color: var(--inner-red);
+}
+
+.works-sticky-word {
+  z-index: 5;
+  position: sticky;
+  /* 2026-09-09：末尾那 10px 是用户要求的下移——吸顶后 W O R K S 离左上角 logo 太近
+     （原始值框顶 58，logo 底边在 69.5，垂直方向本来是叠着的）。
+     分两次各下移 5px：58 → 63 → 68。
+     只加在桌面端这一条上；窄屏那条（媒体查询里）用的是另一套值，没有跟着动。 */
+  top: calc(var(--works-sticky-top) + var(--works-heading-offset) + 10px);
+  display: flex;
+  /* 2026-09-09：从 space-between 改成 flex-end。
+     ⚠ 这不是"版式改成靠右"，而是**动效的终点**：五个字母的最终状态是
+     右侧聚拢成一个词（照参考站 noth.in 实测，见 HANDOFF 第十一轮）。
+     中途那个"散开横跨整屏"是过渡态，由 JS 给每个字母错开的 translateX 造出来。
+     ⚠ 桌面端这一行的实际观感全由 `setupWorks()` 驱动；
+     窄屏没有 JS（`innerWidth >= 992` 才跑），所以媒体查询里单独写回 space-between，
+     否则窄屏会静态地挤在右边。 */
+  justify-content: flex-end;
+  height: 48px;
+  /* 2026-09-09：把**初始位置**下移到原来 `Work` 标签那一行，顶边和右边的 slogan
+     顶边对齐（用户要求，`.works-index` 因此被隐藏，见下面那条规则）。
+     下移量 = 自己的高 48 + 原来的 margin-bottom + `.works-intro` 的 translateY，
+     三项都是变量算出来的，不是拍的数（1536 下合计 132.08px，实测 3862.8 → 3994.9，
+     和 slogan 顶边 3994.9 一致）。
+     ⚠ `margin-bottom` 同步吃掉 48 + translateY，**净位移为 0**——
+     下面的 `.works-intro`、Works 卡片、整段高度一个像素都不动。改任何一项都要重算另一项。
+     ⚠ 只动初始位置；吸顶后的位置仍由上面那个 `top` 决定，动效不受影响。
+
+     2026-09-09（第三版，现在生效的）：`margin-top` 减 150、`margin-bottom`
+     加回 150，让 WORKS 的初始位置跟着一起上移 150px。
+     ⚠ **这个技巧本身没问题**（净位移不变，不影响 `.works-intro` 起点）——
+     早前一度单独用它、把 `.works-intro` 落下没动，导致 WORKS 到 slogan
+     的间距从 130 被拉大到 280，那是"该动的东西没配套动"的错，不是这个技巧
+     本身的错。现在配合 `.works-intro` 那条新加的 `margin-top: -150px`
+     一起用，两者一起上移 150，间距照旧是 130。 */
+  --works-word-drop: calc(48px + clamp(24px, 3vw, 48px)
+    + var(--works-heading-offset) + 20px);
+  margin-top: calc(var(--works-word-drop) - 150px);
+  margin-bottom: calc(-48px - var(--works-heading-offset) - 20px + 150px);
+  mix-blend-mode: difference;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.works-sticky-word span {
+  display: inline-block;
+}
+
+/* ============================================================
+   图带的尺子（2026-09-08 新版 Works，全部按 distil.im 实测换算）
+
+   参考站视口 1536 时：图带高 417、缝 35、文字栏 505、内容宽 1450。
+   恒定的**不是像素而是比例**——参考站整站按 vw 等比缩放（字号全是非整数
+   66.88 / 22 / 10.56 就是证据）。所以这里一律写成内容宽的百分比。
+
+   用 `cqw`（= .works-grid 自身宽度的 1%）而不是 `vw`：
+   `vw` 含滚动条宽度，会让图带比内容线宽出十几像素；`cqw` 量的是元素实际宽度，天然准确。
+   页脚大字用的是同一招。
+   ⚠ `container-type` 会让元素成为 fixed 后代的包含块——.works-grid 里没有 fixed 元素，
+   所以安全。**不要把它往上挪到 .home-works**（那一层附近有 fixed 背景，会出事）。
+
+   改一个数，两条图带一起变。 */
+/* 2026-09-15 新增：首页 Works 三卡轮播（替代旧的 .works-grid 长滚动）。
+   左侧文字栏固定，右侧三张卡片用 CSS 变量 --offset（当前卡到激活卡的距离，
+   由 js/homepage-portal-carousel.js 写在每张卡自己身上）驱动位移/缩放/模糊：
+   0 = 居中大图，±1 = 两侧缩小+模糊。 */
+.works-carousel {
+  display: flex;
+  align-items: center;
+  gap: clamp(32px, 4cqw, 72px);
+  width: 100%;
+  padding: 40px 0;
+}
+
+.works-carousel-info {
+  flex: 0 0 34%;
+  min-width: 280px;
+  /* 2026-09-16：卡片改成按图片原比例的矩形后变宽了，两侧未激活卡的
+     translateX 偏移量是按它自己新的（更宽的）宽度算的百分比，偏移距离
+     跟着变大，有时候会一路探进左边文字栏底下——卡片是 position:absolute
+     + 有 z-index（.wc-card 最高到 10），文字栏是普通文档流、没有 z-index，
+     绝对定位加了 z-index 的元素本来就会盖在普通流内容上面，跟具体挪没挪
+     过去无关。不改文字位置、不改卡片/轨道任何尺寸，只把文字栏的层级提到
+     比卡片最高的 10 还高，压不住就够了。 */
+  position: relative;
+  z-index: 20;
+}
+
+.wc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wc-tags li {
+  border: 1px solid rgba(242, 239, 236, .16);
+  background: rgba(8, 5, 11, .18);
+  padding: 4px 7px 3px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: rgba(242, 239, 236, .46);
+}
+
+.wc-title {
+  margin: 18px 0 0;
+  position: relative;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 50px;
+  font-weight: 400;
+  line-height: .84;
+  letter-spacing: .04em;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.wc-title-inner {
+  display: inline-block;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* 标题 hover 的状态记号与顶部 HOME 同构：文字左侧的一道红竖线。
+   它挂在外层，因此不会和 GSAP 在内层标题上写的 transform 互相覆盖。 */
+.wc-title::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 1px;
+  height: 100%;
+  background: var(--red);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wc-title:hover::after { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-title::after { transition: none; }
+}
+
+.wc-credit {
+  margin: 20px 0 0;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 17px;
+  font-style: italic;
+  color: rgba(242, 239, 236, .32);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* 公司／机构名提白，角色保留低对比度斜体。 */
+.wc-credit .credit-company { color: var(--inner-white); }
+
+.wc-summary {
+  margin: 10px 0 0;
+  max-width: 36ch;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(242, 239, 236, .32);
+}
+
+.works-carousel-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 32cqw;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  outline: none;
+  cursor: grab;
+}
+
+.works-carousel-track:active { cursor: grabbing; }
+
+.wc-card {
+  position: absolute;
+  width: auto;
+  height: 88%;
+  aspect-ratio: 3840 / 1738;
+  border: 0;
+  padding: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+  /* --offset 由 JS 写：0 = 当前激活卡，±1/±2... = 距离激活卡多少张。 */
+  --offset: 0;
+  --near: min(abs(var(--offset)), 1);
+  /* 只识别左边的非激活卡（负 offset）；右边卡保持原亮度曲线。 */
+  --left-near: min(max(calc(var(--offset) * -1), 0), 1);
+  transform:
+    translateX(calc(var(--offset) * 58%))
+    scale(calc(1 - var(--near) * .18));
+  z-index: calc(10 - abs(var(--offset)));
+  /* 2026-09-16：加 brightness 压暗未选中卡——它们探进文字栏底下时
+     （z-index 已经让文字盖在上面，见 .works-carousel-info），
+     图片本身还是亮的话对比度不够、文字仍然不好读，所以再把非激活卡整体调暗。
+     2026-09-16 又改：模糊改用 --near 的平方而不是线性值——越靠近选中态
+     （--near 越小）清晰度提得越快，同样偏移 0.3 时线性是 1.2px 模糊、
+     平方后只有 0.36px，肉眼上就是"快到中间那一段基本已经清楚了"，
+     不是匀速模糊。左侧卡额外减 0.1 亮度，避免它压过左侧文字栏。 */
+  filter: blur(calc(var(--near) * var(--near) * 4px)) brightness(calc(1 - var(--near) * .55 - var(--left-near) * .1));
+  opacity: calc(1 - min(abs(var(--offset)), 2) * .35);
+  /* 离散兜底（窄屏/reduce-motion，见 .wc-track--scrub 覆写）用的过渡：
+     瞬切到新的 --offset 后靠这个补一段动画。 */
+  transition: transform .32s cubic-bezier(.22, 1, .36, 1), filter .32s ease, opacity .32s ease;
+}
+
+/* 2026-09-16：连续跟手模式下 --offset 每帧都在变（GSAP scrub 自己在插值），
+   这条 CSS transition 会跟 scrub 的插值互相打架——每次 --offset 微调，
+   transition 又想从"上一个值"另外补一段动画，两层缓动叠加，观感是
+   "跟不上手、一直在追"。连续模式下 --offset 变化本身就是逐帧连续的，
+   不需要再叠一层 transition，直接去掉，画面跟滚动条 1:1，丝滑感来自
+   ScrollTrigger 的 scrub 数值（见 homepage-portal-carousel.js 里的
+   `scrub: .45`），不是这层 CSS。 */
+.wc-track--scrub .wc-card { transition: none; }
+
+.wc-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wc-card.is-active { cursor: pointer; }
+
+/* Works 轮播当前可打开卡片的桌面跟手提示：高于轮播（20），但不盖过导航（100）。 */
+.wc-card-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 14px 4px;
+  border-radius: 3px;
+  background: #050505;
+  color: var(--inner-white);
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .12em;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+  transition: opacity .18s ease, visibility 0s linear .18s;
+}
+
+.wc-card-cursor.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .18s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html.wc-card-cursor-active .wc-card.is-active,
+  html.wc-card-cursor-active .wc-card.is-active * { cursor: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-card-cursor { display: none; }
+}
+
+@media (max-width: 900px) {
+  .works-carousel { flex-direction: column; gap: 24px; }
+  .works-carousel-info { flex: none; width: 100%; }
+  .works-carousel-track { width: 100%; height: 60vw; }
+  .wc-card { width: 70%; }
+}
+
+.works-grid {
+  --work-strip-h: 28.76cqw;   /* 参考站 417/1450 —— 四条图带唯一的高度 */
+  --work-strip-gap: 2.41cqw;  /* 参考站  35/1450 —— 图与图之间唯一的缝 */
+  --work-text-w: 34.8cqw;     /* 参考站 505/1450 —— 文字栏宽 */
+  --work-strip-a: 57cqw;      /* 参考站 826/1450 —— 第 1 条图带总宽（两格） */
+  --work-strip-b: 57.9cqw;    /* 参考站 840/1450 —— 第 2 条图带总宽（一格） */
+  --work-cell-a: 37.17cqw;    /* 第 1 条左格 = 参考站前两格 252+35+252 = 539 并起来 */
+
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* 行数必须等于实际占用的行数：多写一行，末尾就会凭空多出 430px 空白。
+     2026-09-07 删掉 TRACE 后从 5 行减到 4 行。 */
+  grid-template-rows: repeat(4, minmax(430px, auto));
+  gap: clamp(90px, 11vw, 200px) clamp(10px, 1.1vw, 18px);
+}
+
+/* ===== 新版图带：第 1、2 条共用（`data-work-layout="strip"`）=====
+
+   两条卡的差别只有三处：图带在左还是在右、图带总宽、格子数量。
+   除此之外一个字都不许再为单张卡单独写——这次改版的全部意义就在这里。 */
+.work-item[data-work-layout="strip"] .work-link {
+  display: grid;
+  align-items: center;
+  column-gap: 0;
+}
+
+/* 第 1 条：文字左 / 图带右。中间那道 1fr 是自动撑开的空隙，
+   保证图带右缘和文字栏左缘都精确落在内容线上。 */
+.work-item:nth-child(1) .work-link {
+  grid-template-columns: var(--work-text-w) 1fr var(--work-strip-a);
+}
+.work-item:nth-child(1) .work-info { grid-column: 1; }
+.work-item:nth-child(1) .work-strip { grid-column: 3; }
+
+/* 第 2 条：图带左 / 文字右（和第 1 条对调）。 */
+.work-item:nth-child(3) .work-link {
+  grid-template-columns: var(--work-strip-b) 1fr var(--work-text-w);
+}
+.work-item:nth-child(3) .work-strip { grid-column: 1; }
+.work-item:nth-child(3) .work-info { grid-column: 3; }
+
+/* ===== 文字在图带下面（第 3 条的两块 + 第 4 条）=====
+   照搬参考站 #3 / #5：图带在上、文字整块在下。
+   图带和文字的间距 3.17cqw = 参考站的 46/1450，四条通用。 */
+.work-item[data-work-stack="below"] .work-link {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.work-item[data-work-stack="below"] .work-info {
+  margin-top: 3.17cqw;
+}
+
+/* ===== 标签甩到右边、右对齐（`data-work-tags="right"`）=====
+   2026-09-08 用户指定，目前只有第 4 条 BUBBLE 用。
+
+   为什么只给满宽那条用：图带 1399 满宽，而正文只占 48%（参考站「文字在下面」
+   时正文宽 672 = 内容宽 48%，比文字在旁边时的 505 宽一档），右边会空出一大片。
+   标签靠右正好把这一行的重量补平——参考站 #3/#5 就是这么排的（实测它的标签
+   右对齐到内容线、正文在左）。
+   ⚠ **半幅栏（有道／梦幻西游）不要加这个属性**，栏宽只有 565/801，右移会挤成一团。
+
+   做法：`.work-info` 从 flex 单列改成三列网格 —— [正文 48%] [弹性空隙] [标签]。
+   正文那三行仍旧自上而下待在第 1 列，标签单独占第 3 列。
+   右内边距和别处的文字缩进同一个值，所以标签右缘停在 1420，
+   和其他卡正文的右缘对齐，不会贴到出血线上。 */
+.work-item[data-work-tags="right"] .work-info {
+  display: grid;
+  grid-template-columns: minmax(0, 48cqw) 1fr auto;
+  align-items: start;
+  max-width: none;
+  padding-right: var(--work-text-inset);
+}
+
+.work-item[data-work-tags="right"] .work-info h3 { grid-column: 1; grid-row: 1; }
+.work-item[data-work-tags="right"] .work-credit  { grid-column: 1; grid-row: 2; }
+.work-item[data-work-tags="right"] .work-summary { grid-column: 1; grid-row: 3; }
+
+.work-item[data-work-tags="right"] .work-tags {
+  grid-column: 3;
+  grid-row: 1;
+  justify-content: flex-end;
+  /* 清掉 .work-tags 自带的下外边距——那是给"标签在最上面一行"用的，
+     这里标签在右侧独立成块，留着会把网格行撑高。 */
+  margin: 0;
+  /* 标签顶边与左侧标题文字顶边共用同一基线。 */
+  margin-top: 0;
+}
+
+/* ===== 第 3 条：同一行里两个独立项目 =====
+   左 = 有道（窄）／右 = 网易互娱（宽），用户 2026-09-08 指定。
+
+   ⚠ 为什么要加 padding 而不是直接用栅格的缝：
+   .works-grid 的列间距是 16.9px，但图带体系的标准缝是 33.7px（--work-strip-gap）。
+   两块各补 8.4px 内边距，视觉缝 = 8.4 + 16.9 + 8.4 = 33.7，和别处的缝对齐。
+   实际格子宽度因此是 564.7 / 800.8，两块加缝正好等于内容宽 1399.2。
+   ⚠ **改这里的列跨度就必须重裁那两张图**——素材是按 1.210 / 1.714 裁好的。 */
+.work-item:nth-child(4) {
+  grid-column: 1 / 6;
+  grid-row: 3;
+  align-self: start;
+  padding-right: 8.4px;
+}
+.work-item:nth-child(5) {
+  grid-column: 6 / 13;
+  grid-row: 3;
+  align-self: start;
+  padding-left: 8.4px;
+}
+
+/* 右侧网易项目把整块文字停在与左卡相同的边缘内距线上；
+   行内文字仍从左读起，不做 text-align:right。 */
+.work-item:nth-child(5) .work-info {
+  align-items: flex-end;
+  padding-left: 0;
+  padding-right: var(--work-text-inset);
+  text-align: left;
+}
+.work-item:nth-child(5) .work-tags { justify-content: flex-start; }
+
+/* 右侧网易项目仅把说明文字右对齐；其余文字仍按镜像内距左读。 */
+.work-item:nth-child(5) .work-summary { text-align: right; }
+
+/* 空标签行不占位。第 3 条两块的标签还没有文案，HTML 里是空 <ul>，
+   不隐藏的话会白白撑出一段 30px 的间距。 */
+.work-info .work-tags:empty { display: none; }
+
+/* 图带本身：高度四条恒定，横向怎么切自由，但缝宽必须统一走 --work-strip-gap。
+   缝宽一旦各不相同，"自由切割"就变成新的随意性，等于又回到"每张卡一次性版式"。 */
+.work-strip {
+  display: grid;
+  gap: var(--work-strip-gap);
+  height: var(--work-strip-h);
+}
+/* 第 1 条两格：左格写死宽度，右格吃掉剩下的，这样两格加缝永远精确等于图带总宽，
+   不会因为三个百分比各自四舍五入而差出一两像素。 */
+.work-item:nth-child(1) .work-strip { grid-template-columns: var(--work-cell-a) 1fr; }
+.work-item:nth-child(3) .work-strip { grid-template-columns: 1fr; }
+
+/* 每一格。用 flex 居中让图片多出来的高度平均分到上下两边——
+   这是滚动位移的余量来源，**不要改成 translate 去顶**：
+   GSAP 每帧写的是 transform，静态 translate 会被它当起始值一起算进去，
+   位移量翻倍（第 3、5 张卡都因此出过 bug，见 nth-child(5) 那段注释）。 */
+/* ⚠ 必须写成两级选择器。通用的 `.work-image-wrap { height: 43.125rem }` 特异性
+   同样是 (0,1,0)，但它写在本文件更靠后的位置，平级时后来者胜——
+   只写 `.work-cell` 会让格子高度变成 690px，图带整个塌掉（已实测踩到）。
+   加上 `.work-item[...]` 提到 (0,2,0) 才顶得住。 */
+.work-item[data-work-layout="strip"] .work-cell {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--inner-purple);
+}
+
+/* 图片高度 = 框高的 116%，多出来的 16% 就是它上下能走的全部空间。
+
+   **116% 和 ±6% 是绑死的一对，改一个必须验算另一个：**
+   图高 h = 1.16H，居中后单边溢出 (h−H)/2 = 0.08H = 0.069h。
+   GSAP 的 yPercent 按图片自身高度算，所以位移上限是 6.9%，取 ±6% 留 0.9% 余量。
+   位移超过上限，框的上下边就会露出 --inner-purple 底色。
+
+   ⚠ 必须写成两级选择器。全站那条 `.inner-world img { height:100% }` 的特异性
+   (0,1,1) 比通用的 `.work-image { height:116% }` (0,1,0) 高，会把它顶掉——
+   这个坑在第 5 张卡和空间装置那张底图上各踩过一次，是第三次了。 */
+.work-item[data-work-layout="strip"] .work-image {
+  flex: none;
+  width: 100%;
+  height: 116%;
+  object-fit: cover;
+  transform: none;
+}
+
+/* ===== 取景：PARADOX（2026-09-08，用户给参考图，实测反算出来的三个数）=====
+
+   框（520.1×402.4）一个像素没动，动的只是「框里露出图的哪一块、多大」。
+   参考图用相关匹配量出来的窗口 = 原图 2048×1248 的 x196–1480 / y212–1211
+   （相关系数 .970），即横向只露 62.7%、纵向只露 80.0%，且整体偏下。
+
+   三个数怎么来的（改任何一个都要按这套重算，别凭感觉调）：
+   1. `height: 125%` —— 纵向只露 1/1.25 = 80.0% ✓。
+      图按 cover 由高度驱动，所以横向同时被推到只露 1.292/(1.25×1.641) = 63.0% ✓。
+      两个方向是同一个数控制的，不能各调各的。
+   2. `object-position: 26%` —— 横向裁掉的总量是 37.0%，参考图左边裁掉 9.6%，
+      9.6/37.0 = 26%。纵向那个 50% 是废的：图正好填满元素高度，没有余量可挪。
+   3. `top: -8.75%` —— 纵向的偏移只能靠这个。图默认在框里居中（上下各藏 50.3px），
+      参考图是上藏 85.5 / 下藏 15.1，所以再往上挪 35.2px = 框高的 8.75%。
+      ⚠ 用 `top` 不用 `transform`：GSAP 每帧重写 transform，静态 transform 会被
+      当成起始值一起算进去，位移翻倍（本文件上面那段注释里记过这个坑）。
+
+   ⚠ 这一格的上下滑动因此只剩 ±2.8%，不是全站统一的 ±6%——
+   参考图把画面压到偏下，下边只剩 15.1px 余量，±6% 要 30.2px，会露出底色。
+   幅度写在 HTML 的 `data-slide` 上，验算见 homepage-portal-scroll.js。
+   要换回 ±6%，唯一的办法是把 `top` 从 -8.75% 收到 -5%（取景整体上抬 15px），
+   那就和用户给的参考图不完全一致了——这是用户的选择，不是可以自己改的。 */
+.work-item:nth-child(1) .work-image {
+  position: relative;
+  top: -8.75%;
+  height: 125%;
+  object-position: 26% 50%;
+}
+
+/* ===== 取景：NBA2K（2026-09-08，用户给参考图，同一套流程算出来的三个数）=====
+
+   参考图对应的窗口 = 原图 3tencent.jpg（2048×1530）的 x122–1875 / y493–1371，
+   即横向露 85.6%、纵向露 57.4%，整体偏下（上裁 32.2%、下裁 10.4%）。
+
+   ⚠ **这一格和 PARADOX 有一处本质不同，改之前必须想清楚：**
+   框是 810.1×402.4（比例 2.013），素材比例只有 1.339——**框比图更扁**。
+   所以改之前 cover 是**由宽度驱动**的（图铺满框宽、上下裁掉），
+   这时候纵向可见比例被死死钉在 1.339/2.013 = 66.5%，**调 `height` 一点用都没有**，
+   能动的只有 `object-position` 的第二个数。
+   参考图要露的只有 57.4%，比 66.5% 还紧，所以必须把 `height` 推过
+   2.013/1.339 = **150%** 这道坎，让 cover 变回由高度驱动，三个旋钮才重新生效。
+   （PARADOX 那格素材比框更宽，一直是高度驱动，没有这道坎。）
+
+   1. `height: 174.2%` —— 纵向露 1/1.742 = 57.4% ✓，横向跟着变成
+      2.013/(1.742×1.339) = 86.3% ✓。
+   2. `object-position: 43%` —— 横向共裁 13.7%，左边占 5.9% → 5.9/13.7 = 43%。
+   3. `top: -19%` —— 默认居中是上下各藏 37.1% 框高，参考图要上藏 56.1%，差 19%。
+
+   滑动幅度**不用改，仍是全站统一的 ±6%**：下边藏了 18.1% 框高 = 72.8px，
+   ±6% 只走 42.1px，还剩 30.7px 富余。（PARADOX 那格是被迫收到 2.8% 的例外。）
+
+   分辨率：放大后图在屏幕上宽 938.7，素材 2048 宽，2.2 倍余量，不会糊。 */
+.work-item:nth-child(3) .work-image {
+  position: relative;
+  top: -19%;
+  height: 174.2%;
+  object-position: 43% 50%;
+}
+
+/* ===== 取景：有道（2026-09-09，用户给参考图）=====
+   框 564.7×402.4（比例 1.403），素材 4.1netease.jpg 1600×1322（比例 1.210）。
+   参考图的窗口 = x0–1550 / y95–1200，几乎是整张图，只比现在稍微推近一点、
+   并且把横向对齐从居中改到贴左（左边那片深色衣袖完整保留）。
+   匹配相关系数 0.895，并排对比图看过，构图一致。
+   滑动仍是 ±6%（余量上 8.6% / 下 11.1% 框高，最大能到 7.2%）。 */
+.work-item:nth-child(4) .work-image {
+  position: relative;
+  top: 1.24%;
+  height: 119.7%;
+  object-position: 0% 50%;
+}
+
+/* ===== 取景：网易互娱（2026-09-09）——**故意没有专属规则，走全站默认的 116%** =====
+
+   用户把 4.2netease.png 重裁成 7768×3900（比例 1.992），正好等于格子的 1.99，
+   参考图要的是"整张图铺满框、一个像素不裁"。已转成 2048×1028 JPEG q90（0.47MB）。
+
+   ⚠ 但"整张显示"和"±6% 滑动"在数学上互斥，这一格尤其明显：
+   图和框一样大 → 框外藏 0 像素 → 一动就露底色。
+   要腾出 ±6%，图至少要放大到 **113.6%**（推导：每侧余量 (N−1)/2 ≥ 0.06N → N ≥ 1.136），
+   也就是四周至少各裁掉 6%——不是"挪十几像素"能解决的。
+
+   2026-09-09 用户选了"保滑动"，所以这一格**回到全站统一的 116% 居中**（各裁 7%），
+   不再写任何专属规则。要改回"整张显示"就把下面这段注释掉的规则放回来，
+   并把 HTML 那张 img 的 `data-slide` 设回 0：
+
+   .work-item:nth-child(5) .work-image {
+     position: relative; top: 0.4%; height: 100.8%; object-position: 0% 50%;
+   }
+
+   （匹配相关系数 0.725 偏低是因为这张大面积纯白、没有纹理可对，不是匹配错。） */
+
+/* ===== 取景：BUBBLE（2026-09-09，用户给参考图）=====
+   框 1399.1×402.4（比例 3.477），素材 2demo-web.png 3000×1057（比例 2.838）。
+   参考图的窗口 = x38–2916 / y0–827，即横向露 95.9%、纵向露 78.3%。
+   匹配相关系数 0.919。
+
+   ⚠ 参考图的上沿**贴死在图的最顶端**（`top: 13.86%` 时框外上方藏 0 像素），
+   那样滑动只能是 0。2026-09-09 用户选了"保滑动"，所以把图**往上让 35.6px**
+   （13.86% − 35.6/402.4 = 5.0%），上边让出 35.6px 余量、下边还剩 75.9px。
+   ±6% 走 30.8px，最紧的一侧还剩 4.8px。
+   ⚠ 让 32px 时最紧处只剩 1.1px，亚像素取整就可能露出一条发丝线，所以多让了 4px。
+   横向和放大倍数一个像素没动，只有纵向让了 32px。
+   要严格照参考图就把 `top` 改回 13.86%，并给那张 img 加 `data-slide="0"`。 */
+.work-item:nth-child(2) .work-image {
+  position: relative;
+  top: 5%;
+  height: 127.7%;
+  object-position: 31% 50%;
+}
+
+/* 视频占位格。真视频来了把这个 figure 换成 <video class="work-image">，CSS 不用动。 */
+.work-cell-video {
+  align-items: center;
+  justify-content: center;
+  background: #120d18;
+  box-shadow: inset 0 0 0 1px rgba(242, 239, 236, .12);
+}
+
+.work-cell-label {
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  /* 字级表 4 档。字号本来就对，**字距原来是 .18em**——是标签档 .045em 的四倍，
+     同一个角色却拉得比谁都开，正是"看起来乱"的来源之一。 */
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+}
+
+/* ===== 文字栏：四行固定，顺序锁死（2026-09-08 用户定）=====
+   标签 → 项目名 → 公司 · 职称（斜体）→ 项目简介。
+   四条带子共用这一套，**不要为某一条另写版式**——这次改版的全部意义就在这里。
+
+   字号按参考站 distil.im 的比例换算（它的 title 67 / 正文 22 / 标签 14）：
+     正文 ÷ 标题 = 0.328 → 本站标题 53.8 × 0.328 ≈ 17.6 → 取 17
+     标签 ÷ 标题 = 0.209 → 53.8 × 0.209 ≈ 11.2 → 取 12（和其余三条卡的标签同号，先保持一致）
+   标题沿用站内既有的 h3（Bebas Neue），字体体系是冻结项，没动。 */
+/* ⚠ 文字栏不贴出血线，整组往里缩一段（2026-09-08 用户："文字做靠齐出血很怪"，
+   并指定按之前那版的距离）。`clamp(32px, 2.6vw, 48px)` 就是旧版
+   `--featured-left-inset` 的原值，直接沿用，不是重新拍的数。
+
+   缩的是**朝向页面边缘的那一侧**：第 1 条文字在左就缩左边，第 2 条文字在右就缩右边。
+   两条因此对称，都不会顶在内容线上。 */
+.work-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  --work-text-inset: clamp(32px, 2.6vw, 48px);
+}
+
+.work-item:nth-child(1) .work-info { padding-left: var(--work-text-inset); }
+.work-item:nth-child(3) .work-info { padding-right: var(--work-text-inset); }
+/* 文字在下面时，缩的是左边——文字要相对它上面那张图往里收，
+   和参考站的关系一致（它的图带贴 35、文字缩到 70）。 */
+.work-item[data-work-stack="below"] .work-info { padding-left: var(--work-text-inset); }
+
+/* 第 1 行：标签。**方框**，沿用全站既有的 `.work-tags`——参考图就是方框，
+   而且这样五条卡的标签始终是同一个样式，不用等改版才统一。
+   （中途试过做成 `·` 分隔的一行文字，用户给参考图否掉了。）
+   它自带 `margin-bottom: clamp(20px,2vw,34px)`，标题的上间距就靠它，h3 不再另加。 */
+
+/* 第 2 行：项目名。字族沿用既有的 Bebas Neue（字体体系是冻结项，没动）。
+
+   字号从通用的 `clamp(34px, 3.5vw, 58px)`（1536 下 53.8px）提到 4.1vw（63px），
+   2026-09-08 用户："标题的字体还可以稍微大一点点"。
+   ⚠ **必须写在这里、不能改通用的 `.work-link h3`**——那条是五条卡共用的，
+   改它会连带动到旧版三条（BUBBLE / OPEN FIELD / FOLD MEMORY），那三条是冻结的。
+
+   参考站的比例是 title 67 / 内容宽 1450 → 换算到本站 1399 约 64.6px，
+   所以 63 也在参考站的量级上，不是随手加的。 */
+.work-item[data-work-layout="strip"] .work-info h3 {
+  margin: 0;
+  font-size: var(--t-display);
+}
+
+/* 第 3 行：公司 · 职称。
+
+   ⚠ 这里的斜体是**浏览器合成的伪斜体**——站里加载的三款字体
+   （Jaldi 400/700、Bebas Neue、Special Gothic Expanded One）都没有真正的斜体字形，
+   浏览器只能把正体硬掰斜。小字号下通常还能看，但笔画粗细会不匀。
+   要真斜体只能引第四款字体（等于给站里加一套新字族，需用户拍板）。 */
+/* ⚠ 这两条必须挂在 `.work-item[data-work-layout="strip"]` 下面。
+   它们都是 <p>，会被全站那条 `.work-link p { max-width: 25ch; font-size: 16px;
+   line-height: 1.05 }` 命中——那条是 (0,1,1)，比裸类名 (0,1,0) 高，
+   会把宽度压成 25ch（实测 185.9px，只有文字栏的三分之一）、字号顶回 16px。
+   加上前缀提到 (0,3,0) 才顶得住。**这是本文件里同一个特异性坑的第四次。** */
+.work-item[data-work-layout="strip"] .work-credit {
+  max-width: 100%;
+  margin: 20px 0 0;
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  font-style: italic;
+  /* 字级表 3 档的原型之一——`--t-body` 的值就是从这里和项目简介来的。 */
+  font-size: var(--t-body);
+  /* 行高统一：正文档一律 1.45（原 1.4，和下面项目简介的 1.45 差 0.05，
+     同一档字号排出两种灰）。见 2026-09-09 行高归并。 */
+  line-height: 1.45;
+}
+
+/* 公司名作为项目归属的唯一强调项，职位维持辅助灰。 */
+.work-company { color: var(--inner-red); }
+
+/* 第 4 行：项目简介。 */
+.work-item[data-work-layout="strip"] .work-summary {
+  width: 55ch;
+  max-width: 100%;
+  margin: 18px 0 0;
+  color: var(--inner-muted);
+  font-family: 'Jaldi', sans-serif;
+  /* 字级表 3 档的原型之一。 */
+  font-size: var(--t-body);
+  line-height: 1.45;
+}
+
+/* 还没有文案的行：位置照样占住，画一道短横表示"待补"。
+   ⚠ 这是占位记号，不是内容。补文案时把字写进去、删掉 is-pending 即可。 */
+.work-credit.is-pending::before,
+.work-summary.is-pending::before {
+  content: '—';
+  color: rgba(242, 239, 236, .22);
+}
+
+.work-item {
+  align-self: start;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* 展示顺序只由这几行的 grid-row 决定，和 HTML 里 article 的先后无关
+   （2026-09-07 按用户要求重排）。**要调顺序请只改这里的行号，不要动 HTML 顺序**——
+   下面所有卡片样式（图片框尺寸、文字排版、视差参数）都是按 nth-child 编号写的，
+   一旦挪动 article，每张卡就会套上别人的样式：
+   比如 NBA2K 挪到第 2 位会去找它根本没有的 `.work-second-info`，文字直接塌掉；
+   像素长图挪到第 5 位会套上专为竖图算的"宽度铺满 + ±2.8% 视差"。
+
+   当前视觉顺序（左边是 HTML 里的第几个 article），共四个项目：
+     第 1 个 PARADOX HEAVEN  → 第 1 行，整幅
+     第 3 个 NBA2K（腾讯）    → 第 2 行，居中
+     第 4 个 OPEN FIELD       ┐ 第 3 行，左右并排（网易两个项目）
+     第 5 个 FOLD MEMORY      ┘
+     第 2 个 BUBBLE DELIVERY  → 第 4 行，整幅（游戏 demo）
+
+   增删卡片时记得同步改上面 .works-grid 的 grid-template-rows 行数。 */
+.work-item:nth-child(1),
+.work-item:nth-child(2) { grid-column: 1 / 13; }
+.work-item:nth-child(1) { grid-row: 1; }
+/* 2026-09-08 新版图带：第 2 条不再内缩到 3/11，改为占满内容宽——
+   图带靠左、文字靠右，两端都要精确落在内容线上。 */
+.work-item:nth-child(3) { grid-column: 1 / 13; grid-row: 2; }
+/* 第 3 条那两块（第 4、5 个 article）的跨列、行号、对齐已挪到上面
+   「第 3 条：同一行里两个独立项目」那一段，和它们的 padding 写在一起。
+   ⚠ 原来的 `1/5` + `7/13` + `align-self: end` 已作废——
+   新版两块是 `1/6` + `6/13`、都顶端对齐。 */
+.work-item:nth-child(2) { grid-row: 4; }
+
+.work-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ⚠ 2026-09-08：**五条卡的一次性版式已全部删除**，全部走上面统一的
+   `.work-strip` / `.work-cell` / `.work-info`。这里删掉的是：
+
+   · 第 1 条 PARADOX：`.work-featured-info` / `.work-featured-copy` 那套
+     「文字控制台」（--featured-* 一族变量、`white-space: nowrap` 手工断句、
+     Explore 右对齐）。
+   · 第 2 条 BUBBLE：5fr/7fr 与 1fr/auto 两套网格、`aspect-ratio: 3.3/1`、
+     图片 `width:104% height:127% object-position:left`、`.work-second-info`
+     那一组字号、标签甩到右上角的 `justify-self:end` + 48px 三件套偏移。
+   · 第 2、4 条共用的 `--work-image-zoom / offset-x / offset-y` 三个变量。
+
+   这些结构在 HTML 里都已经不存在，留着只会误导。
+
+   连带失效的还有 PITFALLS [2026-08-28]「EXPLORE 要和最长文字行的视觉右端对齐」——
+   EXPLORE 按用户要求删掉了，那条暂时用不上。**但那条记录别删**，
+   以后要是把按钮加回来，坑还在。 */
+
+.work-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 clamp(20px, 2vw, 34px);
+  padding: 0;
+  list-style: none;
+}
+
+.work-tags li {
+  border: 1px solid rgba(242, 239, 236, .36);
+  background: rgba(8, 5, 11, .3);
+  padding: 6px 10px 5px;
+  color: var(--inner-white);
+  font-family: 'Jaldi', sans-serif;
+  /* 字级表 4 档的原型——上面那两个变量的值就是从这里来的，其余标签向它靠。 */
+  font-size: var(--t-label);
+  line-height: 1;
+  letter-spacing: var(--ls-label);
+}
+
+.work-image-wrap {
+  position: relative;
+  height: 43.125rem;
+  margin: 0;
+  overflow: hidden;
+  background: var(--inner-purple);
+}
+
+/* ⚠ 2026-09-08：第 3 条那两块（第 4、5 个 article）原来的一次性版式已整块删除：
+
+   · 第 4 个（现在是**有道**）：框高 `26.875rem`、`object-fit: contain` +
+     `zoom 1.42` 那一整套。当年的死结是「图被缩到刚好填满框高，余量只剩 0.8px，
+     所以视差被迫设成 0」——注释里写着"要既缩小又保留视差，只能换素材、
+     把取景放宽"。**这次正是这么解决的**：素材按格子比例重裁成 1.210，
+     `cover` 之后不需要任何 zoom，视差也跟着回来了（统一 ±6%）。
+   · 第 5 个（现在是**网易互娱**）：`width:100% + height:auto` 那套按宽度铺满、
+     以及为它单独算的 ±5.5% 视差。同样由重裁素材（1.714）+ 统一 116% 解决。
+
+   两块原来都要「换图必须重算视差幅度」，现在不用了——
+   幅度是全局常数，素材按格子比例裁好即可。
+
+   ⚠ 但那两段注释里的**特异性教训仍然有效**，已提炼到本文件上方
+   `.work-item[data-work-layout="strip"] .work-image` 那一段：
+   `.inner-world img { height:100% }` 是 (0,1,1)，会压过裸的 `.work-image`。 */
+
+/* ⚠ 2026-09-08：第 2 条（NBA2K）原来那套「图上字下 + 标签甩到右上角」的
+   一次性版式已整块删除（图片 112% + center bottom 取景、四行 grid、
+   h3/p/explore 各自指定行号、标签 justify-self:end）。
+   现在走上面统一的 `.work-strip` / `.work-info`，位置全部由那一套决定。
+
+   ⚠ 这里原本还有一条「第一个标签填红底」的规则，2026-09-08 随文案更新一并删除。
+
+   它当初高亮的是 `TENCENT GAMES`——也就是**公司名**。新模板把公司名移到了
+   斜体那行（`.work-credit`），第一个标签变成了 `ONLINE GAME`，红底就落在了一个
+   没有特殊含义的词上；而且五条卡里只有它一个有红标签，和统一版式的目标相反。
+   **规则的用意已经不成立，所以不是"少了个效果"，是它失去了对象。**
+
+   要恢复（比如以后想固定高亮某个标签）就把这段贴回来：
+     .work-item:nth-child(3) .work-tags li:first-child {
+       border-color: var(--inner-red);
+       background: var(--inner-red);
+       color: var(--inner-white);
+     } */
+
+.work-image {
+  height: 116%;
+  transform: translate3d(0, -10%, 0);
+  will-change: transform;
+}
+
+.work-preview-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.work-item.is-previewing .work-image { opacity: 0; }
+.work-item.is-previewing .work-preview-video { opacity: 1; }
+
+/* Works 里只有整张项目卡片和其中的标题是交互面；卡片外保持默认光标。 */
+.home-works { cursor: default; }
+.work-item,
+.work-item * { cursor: default; }
+
+.work-strip,
+.work-strip *,
+.work-title-link { cursor: pointer; }
+
+.work-title-link,
+.work-explore {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.work-explore {
+  display: block;
+  width: max-content;
+  border-bottom: 1px solid currentColor;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 14px;
+}
+
+.work-link h3 {
+  margin: 16px 0 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(34px, 3.5vw, 58px);
+  font-weight: 400;
+  line-height: .9;
+}
+
+.work-link p,
+.work-link span,
+.works-outro,
+.studio-opening > p,
+.sound-toggle,
+.studio-services,
+.people-columns,
+.footer-cta a,
+.footer-meta {
+  font-family: 'Jaldi', sans-serif;
+}
+
+.work-link p {
+  max-width: 25ch;
+  margin: 8px 0 14px;
+  color: var(--inner-muted);
+  font-size: 16px;
+  /* 行高统一：正文档一律 1.45（原 1.05）。见 2026-09-09 行高归并。 */
+  line-height: 1.45;
+}
+
+
+.works-outro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  /* 轮播结束时卡片还固定在视口中央；只留一小段呼吸距离，
+     View all / N5 才能刚好在卡片视口下缘露出来。 */
+  margin-top: 24px;
+  /* Works 与 BREAK 的 View all 都复用这行，统一到 slogan 的字族。 */
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: var(--t-big);
+}
+
+.works-outro a,
+.break-view-more,
+.footer-cta a,
+.footer-meta a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ⚠ 2026-09-09：`.works-outro a` 已从这条里摘出去——参考站的 View all 没有下划线，
+   它的记号是右边那个箭头。**BREAK 的 VIEW MORE 和页脚的链接没动**，红线还在，
+   所以站内暂时是不一致的（用户知情）。要统一得另开一次。 */
+.break-view-more {
+  border-bottom: 1px solid var(--inner-red);
+}
+
+.works-outro p {
+  margin: 0;
+}
+
+/* 空间装置底部的项目出口：文字与箭头规格复用 `.works-outro`，
+   这里只补回全出血装置段之外的内容线与下方呼吸距离。 */
+.install-outro {
+  margin-top: 100px;
+  padding: 0 var(--edge) 100px;
+}
+
+/* Works 段末尾的「View all」——箭头与悬停动作保留参考站做法；
+   字号按本站独立的「行动字」固定为 28px。
+   右边一个 23×12 的折角箭头，线宽 1.5、和文字同色、间距 7.68px（= .2em）。
+   ⚠ 大字号只挂在链接自己身上，右边的 `( N5 )` 仍用 .works-outro 的原字号
+   ——参考站也是「大字链接 + 小字计数」这个对比，两个一起放大就没这个对比了。
+   ⚠ 字重：参考站是 500，站内的 Jaldi 只有 400/700，没有中间档，这里用 400，没有引新字体。 */
+.works-outro .view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: .2em;
+  font-size: 30px;
+  letter-spacing: -.01em;
+  line-height: 1;
+}
+
+/* 箭头本体。尺寸写成 em，字号跟着窗口变时箭头自己等比跟上。
+   ⚠ transform-origin 必须是左端：从左端拉长才读成「射出去」，
+   写成 center 会变成两头一起长，是另一个动作。 */
+.works-outro .view-all-arrow {
+  width: .6em;
+  height: .3125em;
+  flex: none;
+  overflow: hidden;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  transform-origin: left center;
+}
+
+/* 站内既有的无障碍约定：开了「减少动态效果」就不播这个拉长。 */
+@media (prefers-reduced-motion: reduce) {
+  .works-outro .view-all-arrow { transition: none; }
+}
+
+/* ⚠ 2026-09-07：这一段（VIEW MORE 之后的影像占位，fold-study.png + sticky 两级缩放）
+   的 HTML 已被 .home-cinema 替换掉，现在页面里没有 .home-studio-video 了。
+   样式和 js 里的 setupStudioVideo() 都保留着——把那段 HTML 放回去就能恢复，
+   所以别当成死代码删掉。 */
+.home-studio-video {
+  position: relative;
+  height: 230svh;
+  background: transparent;
+}
+
+.studio-video-sticky {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.studio-video-media {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: hidden;
+  transform-origin: center;
+}
+
+.studio-video-media img {
+  transform: scale(1.08);
+  will-change: transform;
+}
+
+.sound-toggle {
+  z-index: 2;
+  position: absolute;
+  right: var(--edge);
+  bottom: 34px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: none;
+  color: var(--inner-white);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.home-studio {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: clamp(10px, 1.1vw, 18px);
+  row-gap: clamp(90px, 13vw, 210px);
+  padding: clamp(126px, 17vw, 270px) var(--edge);
+  background: var(--inner-purple);
+}
+
+.studio-opening {
+  grid-column: 1 / 11;
+}
+
+/* ----------------------------------------------------------------------
+   BREAK 开篇（2026-09-07）：参考站 .section.info-img 那一屏的 1:1 复刻。
+   替换掉原来的 .studio-opening / .studio-portrait / .studio-unexpected /
+   .studio-wide（超大标题 + 散布的两张图那一版）。
+
+   下面所有比例都是在参考站上实测出来的，视口宽 1536、内容盒 1459（左边距 38）：
+
+     文字行     左栏 x=38 宽 625        右栏 x=664 宽 834，段落自身宽 538
+                两边都是 24px / 行高 28.8（1.2）
+     图片行     顶边比文字行低 132px
+                大图 x=664 宽 662，框 662×403（比例 1.643）
+                小图 x=332 宽 207，正方形框，顶边再比大图低 155px
+                小图说明 17.28px，在小图下方 19px
+
+   换算成两栏：左 42.9% / 右 57.1%（内容盒的百分比）；
+   小图在左栏内缩进 47%、占左栏 33.1%；大图占右栏 79.4%。
+   字号一律折成 vw 再夹在实测值上：24/1536 = 1.5625vw，17.28/1536 = 1.125vw。
+
+   **改比例前先回参考站重量一遍**，别凭感觉调——这一段的要求是 1:1。
+   ---------------------------------------------------------------------- */
+/* 2026-09-07：BREAK 开篇和它的两张图被拆成两段，分别排在电影院段的前后。
+   它们原来都在 .home-studio 里，边距和上下留白是那个容器给的；
+   拆出来之后要自己带，否则会贴边。
+
+   两段都**继续套 .break-intro 这个网格**——所以 .break-label / .break-lead /
+   .break-shot / .break-wide 的比例、缩进、下沉全部和拆分之前一致，
+   下面那些实测出来的百分比一个都没改。
+
+   背景留 transparent：上游的电影院段也是透明的，由 .inner-world 统一铺底，
+   这里塞任何颜色都会多出一条接缝。 */
+.home-break-open,
+.home-break-gallery {
+  position: relative;
+  padding: clamp(96px, 13vw, 200px) var(--edge);
+  background: transparent;
+}
+
+/* 电影院画面之后的项目资料紧接着出现；仅这一段的顶部留白固定为 100px。 */
+.home-break-gallery { padding-top: 100px; }
+
+/* 2026-09-15：ALONE IN KYOTO → FADING ONE 的间距单独改成 150px（原共用
+   clamp(96px,13vw,200px) 的底部留白），不影响 .home-break-open 那一侧。 */
+@media (min-width: 992px) {
+  .home-break-gallery { padding-bottom: 190px; }
+}
+
+/* 2026-09-09：桌面端只把 BREAK 标签和右侧叙述字作为一个整体上移。
+   上方 `.home-works` 的底部留白是响应式的，这里先以等量负 margin 抵消它，
+   再保留 250px 顶部留白，最终 View all → BREAK 的实际间距才会是 250px。
+   不影响 BREAK 内部关系，也不改窄屏原有的响应式留白。 */
+@media (min-width: 992px) {
+  .home-break-open {
+    margin-top: calc(-1 * clamp(130px, 17vw, 260px));
+    padding-top: 250px;
+    /* BREAK 左右两栏的可见底边 → 下一段电影院视频：与 Works slogan → 首卡一致。 */
+    padding-bottom: 120px;
+  }
+  /* 同属 ALONE IN KYOTO 的电影院画面 → 项目标题字段。 */
+  .home-break-gallery { padding-top: 60px; }
+}
+
+.break-intro {
+  grid-column: 1 / 13;
+  display: grid;
+  grid-template-columns: 42.9% 57.1%;
+  row-gap: clamp(28px, 3vw, 46px);
+  font-size: var(--t-big);
+  line-height: 1.2;
+  /* 桌面端 .break-sticky-word 要 position:absolute 铺满整行（见下），
+     这里给它当 containing block。窄屏该元素仍是 position:static 走正常
+     文档流，这条 relative 对窄屏没有任何视觉影响。 */
+  position: relative;
+}
+
+/* 2026-09-09：BREAK 先复制 WORKS 的字母结构与字体规格，和右侧叙述字顶边对齐。
+   2026-09-16：接入 `setupBreakWord()` 后，三趟左↔右聚拢/收缩的逻辑和 Works 一样
+   ——`justify-content: flex-end` 是**动效终点**（五字母最终聚拢在右侧、贴着
+   ( N6 ) 一起离场），不是版式；中途的左聚拢、散开都由 JS 给每个字母加负 x
+   造出来，参见 `js/homepage-portal-scroll.js` 的 `setupBreakWord()`。
+   窄屏（<992px）JS 不跑，所以这里保留的是窄屏会看到的静态版式。 */
+.break-sticky-word {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  height: 48px;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  mix-blend-mode: difference;
+}
+
+.break-sticky-word span { display: inline-block; }
+
+/* 2026-09-17 用户反馈修正：BREAK 的"滚到右边"和 WORKS 的"滚到右边"对不上——
+   WORKS 的 `.works-sticky-word` 是 `.home-works` 的直接子元素，不在任何窄列
+   grid 里，`justify-content: flex-end` 铺的是**整行内容宽度**，所以能一路挪到
+   贴近 ( N5 ) 的真实右边缘。BREAK 的 `.break-sticky-word` 之前是 `.break-intro`
+   两栏 grid 的第一个格子，宽度只有 42.9%，flex-end 只能挪到那一格自己的
+   右边，离 ( N6 ) 真正的右边缘还差一大截——这才是"滚动距离不对"的根源，
+   不是动效参数的问题。
+   桌面端把它从 grid 格子里摘出来，改成 position:absolute 铺满 `.break-intro`
+   整行宽度（和 WORKS 的整行宽度一致），flex-end 就能挪到同一个右边缘。
+   摘出来之后 `.break-intro` 只剩 `.break-lead` 一个在文档流里的格子，
+   会被自动放进第一格（左栏），所以下面把它显式钉回第二格（右栏），
+   版式和摘除前一样、只是不再占用第一格的宽度。 */
+@media (min-width: 992px) {
+  .break-sticky-word {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .home-break-open .break-lead {
+    grid-column: 2;
+  }
+}
+
+/* 每一行都是一个遮罩：内层从下方推上来，越出的部分被这里裁掉。
+   overflow: hidden 会切到字母的下沿，所以往下多留 .14em 再用负 margin 收回，
+   布局高度不变，但降部（g / y / p）不会被削平。 */
+.break-intro .line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: .14em;
+  margin-bottom: -.14em;
+}
+
+.break-intro .line-inner {
+  display: block;
+  will-change: transform;
+}
+
+/* 2026-09-16：footer 大 slogan 用户要求复刻 BREAK 开篇那句
+   （"A space for experiments..."）的遮罩推入出场效果，同一套 .line/.line-inner
+   结构，逻辑见 js/homepage-portal-scroll.js 的 setupFooterLead()。 */
+.footer-cta h2 .line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: .14em;
+  margin-bottom: -.14em;
+}
+
+.footer-cta h2 .line-inner {
+  display: block;
+  will-change: transform;
+}
+
+.break-label,
+.break-lead p {
+  margin: 0;
+}
+
+/* ALONE IN KYOTO 的标签 / 标题 / 角色与 Break 总览页的项目信息保持同一套规格。 */
+.break-project-info {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: start;
+  /* 实测 `.nav-logo` 宽 88.2875px；字段左边缘 = `--edge` + 此值，
+     因而精确落在左上 logo 的右边缘。 */
+  padding-left: 88.2875px;
+}
+
+.break-project-copy { grid-column: 1; }
+
+.break-project-info .work-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px;
+  width: min(420px, 43vw);
+  margin: 0;
+}
+
+.break-project-info .work-tags li {
+  border-color: rgba(242, 239, 236, .16);
+  background: rgba(8, 5, 11, .18);
+  padding: 4px 7px 3px;
+  color: rgba(242, 239, 236, .46);
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.break-project-info h2,
+.break-project-info .break-title-interactive {
+  margin: 18px 0 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 50px;
+  font-weight: 400;
+  line-height: .84;
+  letter-spacing: .04em;
+}
+
+/* Kyoto 标题复用 Works 的 hover 语言：内层由 GSAP 做轻微推进，外层左侧红线
+   只依赖自身高度，因此项目名换成两行时也会自然匹配整块文字。 */
+.break-title-interactive {
+  position: relative;
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.break-title-inner {
+  display: inline-block;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.break-title-interactive::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 1px;
+  height: 100%;
+  background: var(--red);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .break-title-interactive:hover::after { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .break-title-interactive::after { transition: none; }
+}
+
+.break-project-credit {
+  margin: 20px 0 0;
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.break-project-summary {
+  margin: 10px 0 0;
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* 段落自身宽 538 / 右栏 834 = 64.5%。断行写死在 HTML 里，这里只兜底。
+   这一宽度恰好等于 Works slogan 的 36.8295% 宽；桌面端把两者一起推到
+   视口右缘，因此左右边界都严格重合，不会改变既有的两行断句。 */
+.break-lead p {
+  max-width: 64.5%;
+  margin-left: auto;
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-weight: 400;
+}
+
+/* 2026-09-07：机器人 + 两个对白框按用户给的参考图重新组装。
+   参考图里的构图不在原来那个「小图缩进 47%」的位置上——它整组挪到了左栏最左边，
+   而且底边和右侧大图的底边齐平。所以 .break-shot 不再做缩进，改成整条左栏，
+   位置全部交给下面的 .break-robot-stage。
+
+   ⚠ 这些百分比是从参考图上量出来再换算的，不是估的。方法（换素材时照做）：
+   1. 以参考图里那张大图（= .break-wide）当标尺，它的 CSS 宽高是已知的，
+      于是得到「参考图 1 像素 = 多少 CSS 像素」。
+   2. 量三个素材在参考图上**不透明内容**的外框（不是文件外框——三张 PNG 四周都有
+      透明留白，5.2 左边留 33/1316，5.1 左边留 14/496，直接按文件外框对会整体偏）。
+      三者量出来的长宽比和源文件分别差不到 1%，说明这张参考图是可复原的，不是随手拼的。
+   3. 把内容框换算回 CSS 尺寸，再按各自的留白比例反推元素框。
+   两条对齐关系是参考图里明确存在、这里特意保住的：
+   **机器人底边 = 大图底边**；**大对白框的左上角 = 整组的左上角**。 */
+.break-shot {
+  grid-column: 1;
+  grid-row: 2;
+  position: relative;
+  /* 2026-09-10：只让人物/机器人图组视觉下移，不参与文档流，避免带动 VR。 */
+  top: 40px;
+  width: 100%;
+  margin-left: 0;
+  /* 组合顶边比大图顶边低 28px（28/1536 = 1.85vw）。 */
+  margin-top: clamp(14px, 1.85vw, 30px);
+  overflow: visible;
+  z-index: 2;
+  will-change: transform;
+}
+
+/* 三个透明素材共享这个内层，才能以同一条图内视差一起移动。
+   用 aspect-ratio 而不是写死 height：三张图的 top 是按这个高度的百分比定的，
+   高度一旦和宽度脱钩，纵向关系就会随窗口尺寸走形。 */
+.break-robot-stage {
+  position: relative;
+  left: 45px;
+  width: 85.75%;
+  margin-left: 2.67%;
+  aspect-ratio: 514.7 / 357.6;
+  /* 三张贴纸作为一个整体缩至 85%；左下角保持不动，机器人底边仍与右侧大图对齐。 */
+  transform: scale(.85);
+  transform-origin: left bottom;
+  overflow: visible;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.break-robot-stage img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  height: auto;
+}
+
+/* ⚠ 下面三条必须写成两级选择器（.break-robot-stage .xxx）。
+   全站有一条 `.inner-world img { width: 100% }`，权重比单个类高，
+   写成 `.break-robot { width: … }` 会被它整条盖掉——2026-09-07 之前这三张图
+   其实全都在按 100% 显示，写在这里的 68% / 104% / 32% 一个都没生效过。 */
+
+/* 大对白框：整组的左上角基准点。 */
+.break-robot-stage .break-robot-speech-primary {
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 55.12%;
+}
+
+/* 机器人：5.1.png 本身就朝左，**不要再加 scaleX(-1)**，加了会背对对白框。
+   底边正好落在 stage 底边，也就是右侧大图的底边。 */
+.break-robot-stage .break-robot {
+  z-index: 2;
+  top: 11.33%;
+  left: 29.88%;
+  width: 62.23%;
+}
+
+/* 小对白框：贴在头部右侧。 */
+.break-robot-stage .break-robot-speech-secondary {
+  z-index: 3;
+  top: 11.27%;
+  left: 79.44%;
+  width: 20.56%;
+}
+
+.break-caption {
+  margin: clamp(12px, 1.24vw, 19px) 0 0;
+  /* 字级表 3 档（原值 1.125vw = 17.28px）。 */
+  font-size: var(--t-body);
+}
+
+.break-wide {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  /* 与左侧人物图组同步下移；不用 transform，避免和 setupBreakIntro() 抢同一属性。 */
+  top: 10px;
+  /* 大图占右栏 662/834。 */
+  width: 79.4%;
+  margin: 0;
+  /* 框的比例就是参考站量到的 662×403。 */
+  aspect-ratio: 662 / 403;
+  overflow: hidden;
+  will-change: transform;
+}
+
+/* 右侧 Kyoto 大图是详情入口。button 重置只消除浏览器默认外观，不改原有图框几何。 */
+.break-wide--interactive {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+/* 与 Works 卡片一致的桌面 VIEW 提示；它独立于银幕／图片的滚动变换。 */
+.kyoto-view-cursor,
+.jason-view-cursor,
+.install-view-cursor,
+.game-demo-drag-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 14px 4px;
+  border-radius: 3px;
+  background: #050505;
+  color: var(--inner-white);
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .12em;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+  transition: opacity .18s ease, visibility 0s linear .18s;
+}
+
+.kyoto-view-cursor.is-visible,
+.jason-view-cursor.is-visible,
+.install-view-cursor.is-visible,
+.game-demo-drag-cursor.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .18s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html.kyoto-view-cursor-active .break-wide--interactive,
+  html.kyoto-view-cursor-active .break-wide--interactive *,
+  html.jason-view-cursor-active .install-drift--interactive,
+  html.jason-view-cursor-active .install-drift--interactive *,
+  html.install-view-cursor-active .install-detail-trigger,
+  html.game-demo-drag-cursor-active .vr-game-stack,
+  html.game-demo-drag-cursor-active .vr-game-stack * { cursor: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kyoto-view-cursor { display: none; }
+}
+
+/* 框内图的 110% 高度与参考站一致；额外的 10% 供图内视差使用。
+   实际移动参数见 setupBreakIntro()：左图 -8%，右图 +10%。 */
+.break-shot-frame img,
+.break-wide img {
+  height: 110%;
+  width: 100%;
+  object-fit: cover;
+  object-position: top;
+  will-change: transform;
+}
+
+.parallax-frame {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+}
+
+.parallax-frame img {
+  height: 116%;
+  transform: translate3d(0, -5%, 0);
+  will-change: transform;
+}
+
+/* ⚠ 2026-09-07：原来这里有 .studio-portrait / .studio-unexpected / .studio-wide
+   三条规则（散布在 12 栅格里的两张大图 + 一行 Bebas 红色大字）。
+   那一版已被上面的 .break-intro 整体替换，规则一并删除。
+   注意新的两个框**不带** .parallax-frame：视差由 setupBreakIntro() 自己按参考站
+   的实测值驱动，挂上 .parallax-frame 会和 setupStudioParallax() 抢同一个 img。 */
+
+.studio-services {
+  grid-column: 1 / 13;
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.studio-services h3 {
+  font-size: clamp(82px, 13vw, 210px);
+  line-height: .79;
+  letter-spacing: -.03em;
+}
+
+.studio-services > div {
+  padding-top: 18px;
+  font-size: clamp(18px, 1.7vw, 27px);
+}
+
+.studio-services p {
+  margin: 0 0 42px;
+  color: var(--inner-red);
+}
+
+.studio-services ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-services li {
+  margin: 0 0 12px;
+}
+
+.falling-statement {
+  grid-column: 1 / 13;
+  min-height: 150svh;
+  display: grid;
+  place-items: start;
+  padding-top: clamp(30px, 6vw, 90px);
+  overflow: clip;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(42px, 6.2vw, 100px);
+  line-height: .92;
+}
+
+.falling-statement p {
+  position: sticky;
+  top: 34svh;
+  max-width: 14ch;
+  margin: 0;
+  color: var(--inner-white);
+}
+
+.falling-statement .fall-char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+.falling-statement .fall-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.home-people {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: clamp(60px, 9vw, 142px) clamp(10px, 1.1vw, 18px);
+  padding: clamp(126px, 17vw, 270px) var(--edge);
+  background: var(--inner-purple);
+}
+
+.home-people > h2 {
+  grid-column: 1 / 10;
+  font-size: clamp(90px, 14vw, 228px);
+  line-height: .78;
+  letter-spacing: -.03em;
+}
+
+.people-columns {
+  grid-column: 2 / 8;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 34px;
+  font-size: clamp(17px, 1.55vw, 24px);
+}
+
+.people-columns h3 {
+  margin: 0 0 28px;
+  color: var(--inner-red);
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.people-columns p {
+  margin: 0 0 8px;
+}
+
+.people-image {
+  grid-column: 8 / 13;
+  height: min(72svh, 760px);
+}
+
+/* ----------------------------------------------------------------------
+   VR 项目首屏（2026-09-07）—— 参考 distil.im 的项目详情页首屏。
+
+   参考站实测（视口 1536，内容盒 1380，左右边距 70）：
+     主标题   131.12px / 行高 118（0.9）/ 字重 600 / 字距 0.99
+     简介     27.28px，宽 857
+     右侧 logo 组   x=989 宽 461，上面那行小标签 10.56px
+   字号一律折成 vw 再夹在实测值上：27.28/1536 = 1.78vw，10.56/1536 = 0.69vw。
+
+   **有意不照搬的三处**（理由写在 HTML 那一段的注释里）：字体用站里的 Bebas Neue、
+   左右边距用站里的 --edge、CTA 用站里的洋红。改之前先看那段注释。
+
+   构图按用户给的参考图：顶部一行分类标签 + 右侧四组署名，中间巨大标题压一条线，
+   下面一句简介，再下面一个方形洋红箭头按钮，全部压在整幅底图上。
+   ---------------------------------------------------------------------- */
+/* 2026-09-07：这一段改成左右留出血，宽度用 var(--edge)——和上面的 Works 卡
+   （`.home-works` 的左右 padding）是同一个变量，所以两段的出血线天然对齐，
+   以后改 --edge 也一起变。黑色底从 .home-vr 挪到 .vr-stage：留在外层的话，
+   出血那两条会是纯黑，和 .inner-world 的 #09070b 差一档，看得出两条边。 */
+.home-vr {
+  position: relative;
+  padding: 0 var(--edge);
+  background: transparent;
+}
+
+/* 2026-09-10：项目间距规格。ALONE IN KYOTO → VR(现 GAME DEMOS) 为 200px。
+   2026-09-16：GAME DEMOS → THE NEW IDENTITY CARD 单独改为 800px（用户要求）。
+   仅桌面端生效，窄屏保持原节奏。 */
+@media (min-width: 992px) {
+  .home-vr { margin-bottom: 800px; }
+}
+
+/* 2026-09-16：GAME DEMOS → THE NEW IDENTITY CARD 之间的空白里，左侧叠放三张
+   可交互游戏卡片（仿 21st.dev Image Stack Carousel：拖拽/点击最前面那张，
+   它飞到最底层，后一张转到最前面）。用负 margin-top 把它从正常文档流位置往上拉，
+   落在 .home-vr 那段 800px 空白的中段；只在桌面端出现，窄屏这段空白本来就不固定，
+   不塞入这组卡片。
+   ⚠ 每张图的 transform / z-index 由 js/homepage-vr-stack.js 逐帧写 inline style
+   （因为顺序会随交互变化，nth-child 锁不住"第几层"），这里只定基础外观和过渡时长，
+   改动画节奏改这条 transition，改叠放角度/错位量去改 JS 里的 STACK_POSITIONS。
+   2026-09-16：右侧加了文字信息面板（.vr-stack-info），两者用 .vr-game-stack-row
+   包一层 flex 摆在一行；原来挂在 .vr-game-stack 上的定位 margin 挪到这个外层，
+   .vr-game-stack 自己只管卡片本身的尺寸/透视。 */
+.vr-game-stack-row { display: none; }
+
+@media (min-width: 992px) {
+  .vr-game-stack-row {
+    display: flex;
+    align-items: center;
+    gap: clamp(32px, 4vw, 64px);
+    /* 2026-09-16：用户要求和下方 THE NEW IDENTITY CARD 之间留出间隙（原来贴在一起，
+       因为 800px 空白全用在了「上方间隙」，卡片组自己底下是 0）——改成上下各留一段。
+       右移量几轮调整下来累计 +170px；纵向上移累计 100px（margin-top -550→-650，
+       margin-bottom 同步 250→350，保持总的 800px 空白不变）。 */
+    /* 2026-09-16：下面的 View all 和卡片组之间的间距改成 150px。 */
+    margin: -650px 0 150px calc(var(--edge) + 190px);
+  }
+
+  .vr-game-stack {
+    position: relative;
+    flex: none;
+    width: min(470px, 40vw);
+    aspect-ratio: 3840 / 1890;
+    /* perspective 配合 JS 里拖拽时的 rotateX/rotateY，做出参考组件那种 3D 倾斜感。 */
+    perspective: 1200px;
+  }
+
+  .vr-game-stack img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, .5);
+    /* 2026-09-16：复刻参考组件（ayushmxxn/serenity-ui 的 SwipeCards）源码里的
+       transformOrigin: "85% 85%"，不是严格的右下角(100% 100%)。 */
+    transform-origin: 85% 85%;
+    transition: transform .5s cubic-bezier(.34, 1.56, .64, 1);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .vr-game-stack img.is-dragging { transition: none; cursor: grabbing; }
+
+  /* 文字格式照抄 .break-project-info（ALONE IN KYOTO 那一套）：标题用 .vr-stack-title
+     （不能直接复用 .break-project-info h2，那条选择器绑在 KYOTO 的网格容器里，挪到这里
+     不生效，所以另起一个类、数值照抄）。来源直接复用 .break-project-credit，它本身
+     不依赖网格。标签同理：用户要求和 KYOTO 一样，照抄 .break-project-info .work-tags
+     / li 那套数值（比全站通用的 .work-tags 更小更淡），另起类名避免绑定网格。 */
+  .vr-stack-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* 2026-09-16：用户要求文字字段整体右移，先 50px，又加 30px，累计 80px。 */
+    margin-left: 80px;
+  }
+
+  .vr-stack-info .work-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px;
+    margin: 0;
+  }
+
+  .vr-stack-info .work-tags li {
+    border-color: rgba(242, 239, 236, .16);
+    background: rgba(8, 5, 11, .18);
+    padding: 4px 7px 3px;
+    color: rgba(242, 239, 236, .46);
+    font-size: 12px;
+    letter-spacing: .04em;
+  }
+
+  .vr-stack-title {
+    margin: 18px 0 0;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 50px;
+    font-weight: 400;
+    line-height: .84;
+    letter-spacing: .04em;
+  }
+
+  .vr-stack-credit { white-space: normal; }
+
+  /* 和 Break 总览页同一条规则（break.css）：Global Game Jam 那两条项目的赛事名标白。 */
+  .vr-stack-credit .credit-company { color: var(--white); }
+}
+
+.vr-stage {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #000;
+}
+
+/* 底图自己一层，滚动时单独做视差。
+   图比舞台高一截（116%），多出来的 16% 就是视差行程；
+   **余量必须大于 JS 里的行程**，否则走到头会露出下面的黑底。 */
+.vr-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.vr-bg img {
+  width: 100%;
+  height: 100%;
+  /* 改成 contain：整张图（含它自己的边框）完整装进卡片，不裁边，
+     多出来的空隙露出 .vr-stage 的黑色背景。--vr-img-scale 单独控制图片
+     自己的缩放，不影响卡片形状；GSAP 的视差 yPercent 仍作用在这同一个元素上，
+     和 .break-robot-stage 的「CSS 静态 scale + GSAP 动态 yPercent」共存方式相同。 */
+  object-fit: contain;
+  /* 图片贴右：object-position 把它在 contain 后的留白全部推到左边，
+     图片自己的右边缘贴住卡片右边界。 */
+  object-position: calc(100% - 20px) center;
+  /* 2026-09-15：实测最少要放大到 123.85% 才能让下面 JS 里 -12%~-2% 的
+     视差范围不露黑底，这里定为 124%。 */
+  transform: scale(var(--vr-img-scale, 1.1)) translateY(10px);
+  will-change: transform;
+}
+
+/* 暗罩：上重下轻。字全在上半部分，下半部分要把照片本身让出来。
+   固定渐变，不用 blur——滚动时只动 transform，浏览器不必每帧重算滤镜。
+
+   ⚠ 这几个数是跟着**当前这张底图**调的，不是通用值。参考站那张照片顶部本来就是
+   暗的，随便压一层就够；6.jpg 整体偏亮（浅色地面 + 密集人物），
+   第一版按参考站的比例写（.80 / .58 / .14 / .40），简介那一行正好落在最亮的地面上，
+   发虚读不清。所以文字带内的下限被抬到了 .34。
+   **换底图必须重新看一眼这四个数**，尤其是 58%~78% 这一段——简介和按钮在那里。 */
+.vr-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(0, 0, 0, .82) 0%,
+    rgba(0, 0, 0, .64) 32%,
+    rgba(0, 0, 0, .46) 58%,
+    rgba(0, 0, 0, .34) 78%,
+    rgba(0, 0, 0, .48) 100%);
+}
+
+/* 2026-09-08：改成撑满一屏的纵向 flex，底部那一行用 margin-top:auto 顶到底边。
+   上下留白原来只按 vw 算，窗口一矮就吃掉太多高度，所以再用 svh 各夹一道
+   （`min(...)` 取小的那个）——这是"整段限死一屏"能成立的前提。 */
+.vr-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  padding: min(clamp(52px, 6.4vw, 104px), 9svh) var(--edge)
+           min(clamp(48px, 6vw, 96px), 8svh);
+  color: var(--white);
+}
+
+/* 和 .break-intro 里那套是同一个机制：内层从下方推上来，越出的被外层裁掉。
+   往下多留 .14em 再用负 margin 收回，布局高度不变，降部不会被削平。 */
+.vr-content .line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: .14em;
+  margin-bottom: -.14em;
+}
+
+.vr-content .line-inner {
+  display: block;
+  will-change: transform;
+}
+
+.vr-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: clamp(24px, 4vw, 72px);
+  flex-wrap: wrap;
+}
+
+.vr-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+}
+
+.vr-tags li {
+  padding: 7px 12px 6px;
+  background: rgba(0, 0, 0, .55);
+  /* 字级表 4 档。原来 .82vw = 12.6px / 字距 .08em，
+     和项目标签（12px / .045em）是同一个角色，却是两套数。 */
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+  line-height: 1;
+}
+
+.vr-credits {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(20px, 2.6vw, 44px);
+}
+
+/* 字级表 4 档。原来是 .69vw（参考站实测 10.56px）——比标签档还小半档，
+   在这个站里读不出是另一个层级，只读得出"这里的字又是另一个大小"。
+   ⚠ 它和下面 .vr-credit-name 现在同号了，两者的主次改为**只靠这条 opacity 区分**。 */
+.vr-credit-label {
+  margin: 0 0 6px;
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+  opacity: .72;
+}
+
+/* 字级表 4 档。原来是 1.05vw = 16.1px 且用第三款字族 Special Gothic Expanded One。
+   ⚠ 2026-09-09 用户定：第三款字族只用于品牌签名与顶部导航；其余位置保留 Jaldi。 */
+.vr-credit-name {
+  margin: 0;
+  font-family: 'Jaldi', sans-serif;
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+}
+
+/* ⚠ 2026-09-08：字号和上边距都再用 svh 夹一道。
+   这一段要限死一屏，而字号原本只按 vw 算——窗口变矮时标题一点都不缩，
+   于是宽屏矮窗（比如把浏览器拖矮）必然溢出。28svh 这个系数是算出来的：
+   在 1536 宽、639 高时它是 179px，几乎不影响正常窗口下的 12vw(184px)，
+   只有窗口明显变矮时才接管。 */
+.vr-title {
+  /* 2026-09-15：标签→标题的间距改成和 ALONE IN KYOTO 一样的 18px（实测对齐）。 */
+  margin: 18px 0 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+  /* 2026-09-16：用户要求放大到 110px。 */
+  font-size: 110px;
+  line-height: .86;
+  letter-spacing: .01em;
+}
+
+/* 2026-09-16：GAME DEMOS 标题、分隔线与简介作为一组下移 30px；
+   仅改变这组文字的视觉位置，不影响同段标签、图片或后续项目间距。 */
+.vr-heading {
+  transform: translateY(30px);
+}
+
+/* 标题下面那条线。宽度由 JS 按标题实际渲染宽度写进 --vr-rule-w——
+   Bebas 的字宽随字号变，写死百分比在别的视口下就和标题右端对不齐了。
+   下面的 100% 只是 JS 没跑起来时的兜底。 */
+.vr-rule {
+  width: var(--vr-rule-w, 100%);
+  height: 2px;
+  margin: clamp(10px, 1vw, 18px) 0 0;
+  background: currentColor;
+  opacity: .85;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* 参考站简介实测 27.28px 宽 857（占内容盒 62%）。 */
+.vr-sub {
+  /* 2026-09-16：用户要求缩短与标题的间距，减 10px。 */
+  margin: calc(min(clamp(22px, 2.4vw, 40px), 5svh) - 10px) 0 0;
+  max-width: 62%;
+  /* 2026-09-16：使用 slogan 的 General Sans，字号 22px。 */
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-size: 22px;
+  /* 行高统一：大句子档一律 1.2（原 1.25）。
+     ⚠ VR 段限死一屏，改这个数会改变段落高度，必须实测 overflows。 */
+  line-height: 1.2;
+}
+
+/* 桌面端所有叙事字统一为 28px；不改共用的 --t-big，
+   因此导航、项目标签与计数信息仍维持各自原来的大小。 */
+@media (min-width: 992px) {
+  .works-intro h2.works-slogan,
+  .works-index,
+  .break-intro {
+    font-size: 28px;
+  }
+
+  /* Works slogan 的负右边距让它出血到视口右缘；BREAK 叙述字同步移动同一距离，
+     其左边界便与上方 slogan 精确对齐。 */
+  .break-lead p { margin-right: calc(-1 * var(--edge) + 15px); }
+
+}
+
+/* 底部一行：附图在左（贴内容线），箭头在它右边，两个都对齐到这一行的底边。
+   margin-top:auto 把整行顶到一屏的底部，所以上面留多少空全由窗口高度决定，
+   不用写死。 */
+.vr-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(18px, 2.2vw, 38px);
+  margin-top: auto;
+  padding-top: min(clamp(26px, 2.8vw, 46px), 5svh);
+}
+
+.vr-cta {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: clamp(58px, 4.65vw, 92px);
+  aspect-ratio: 1;
+  background: #C30750;
+  color: var(--white);
+  transition: background .3s ease, transform .3s ease;
+}
+
+.vr-cta svg { width: 46%; height: auto; }
+
+.vr-cta:hover,
+.vr-cta:focus-visible {
+  background: rgb(228, 19, 77);
+  transform: translateX(4px);
+}
+
+/* 左下角附图。左边缘和上面的标签／标题共用同一条内容线。
+   aspect-ratio 用素材自己的比例（8650×4602 = 1.88），配 cover 只是兜底，
+   实际一个像素都不裁。
+   ⚠ 高度必须同时受 svh 约束：这一段要装进一屏，窗口一矮就得让它先缩，
+   否则会把整段顶出一屏。宽度是跟着高度走的（aspect-ratio 反推），
+   所以只调 `height` 这一个数就行。 */
+.vr-inset {
+  flex: none;
+  height: min(22svh, 20vw, 240px);
+  aspect-ratio: 8650 / 4602;
+  margin: 0;
+  overflow: hidden;
+}
+
+.vr-inset img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 窄屏：署名一排四组会挤成一团，改成换行；简介放开宽度。
+   放在这里而不是文件末尾的响应式区，是为了让这一段自成一块、整体可搬走。 */
+@media (max-width: 991px) {
+  .vr-meta { flex-direction: column; }
+  .vr-credits { flex-wrap: wrap; row-gap: 18px; }
+  .vr-sub { max-width: none; }
+  .vr-rule { width: 100%; }
+}
+
+/* 窄屏横向排不下"图 + 箭头"，改成箭头在上、图在下，图放宽到整条内容线。
+   这里放弃"限死一屏"：窄屏本来就是竖着堆，硬压会把图压到看不清。 */
+@media (max-width: 700px) {
+  .vr-content { min-height: 0; }
+  .vr-foot {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: clamp(18px, 4vw, 30px);
+  }
+  .vr-inset { width: 100%; height: auto; }
+}
+
+/* ----------------------------------------------------------------------
+   空间装置 THE NEW IDENTITY CARD（2026-09-08）—— 版式参考 noth.in 的首屏。
+
+   整幅底图 + 五组左右错落的小字；往下滚时小字逐字往下碎裂（见 setupInstall()）。
+
+   高度 200svh + 内层 sticky：底图钉住一屏不动，多出来的一屏是碎裂的行程。
+   这套结构和 .home-glitch 是同一个（那边是 240svh + .glitch-sticky），不是新发明的。
+
+   左右出血用 var(--edge)，和上面的 Works 卡、VR 段同一个变量。参考站是真·满幅到
+   浏览器边缘的，这里按站内一致优先（PITFALLS [2026-08-28] 那条：出血指的是
+   和内容线对齐，不是贴住视口边缘）。
+
+   ⚠ 五组小字的 --x / --y 是从用户给的参考图上量出来的百分比，别随手改：
+   量的是每组文字**不透明笔画**的外框，五组都是 507×168（原图 3840×1738），
+   换算方式和 ALONE IN KYOTO 那次一致。
+   ---------------------------------------------------------------------- */
+/* ★★ 2026-09-08 第二次重做：**整段骨架照搬 noth.in 的 `section.glitch`**。
+
+   最要紧的一条：**这一段没有写死的高度。**
+   段落高度 = 底图按页面宽度铺满之后的自然高度。参考站实测 section 高 1536px，
+   而里面那张 1:1 的图铺满 1536 宽正好也是 1536px——两个数字相等不是巧合。
+
+   ⚠ 不要给 .home-install 加 height / min-height，也不要给底图加 object-fit:cover。
+     上一版写的是 `height: 167svh` + 图在 sticky 里 cover，那等于把一张长图压成一屏
+     再裁掉两头，图从头到尾一动不动，整段自然就没有推进感。**不要改回去。**
+
+   ⚠ 本站这张图是 1920×2356（0.815:1），比参考站那张 1:1 更竖，
+     所以铺满 1536 宽后是 1885px ≈ 2.95 屏，比参考站的 2.21 屏长约三分之一。
+     嫌长就从**图的底部**裁（下半是空地板），不要改 CSS 加高度。
+
+   ⚠ 全出血，没有 --edge。参考站这一段贴满视口宽，且下面所有百分比落点
+     （五组小字的 --x、两张飘浮图的 --x/--w）都是按整个视口宽量的。
+     要恢复站内出血系统：给 .home-install 加回 `padding: 0 var(--edge)`，
+     并把 .install-drifts 的 left/right 改回 var(--edge)——两处必须一起改，
+     只改一处落点会错位。
+
+   ⚠ 各层动效的起止点写在 JS 里（'center 30%' / 'center center' / 'bottom top'
+     这类相对位置），所以换图、段落高度变了都不用回来改 JS。 */
+.home-install {
+  position: relative;
+  overflow: clip;
+  background: #000;
+}
+
+/* 空间装置自身只在进入段落的第一个视口可打开；下半段不给它留点击层。 */
+.install-detail-trigger {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  width: 100%;
+  height: 100svh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* 段落高度的来源：正常流里的一张长图。别给它 position/inset/height。 */
+.install-bg {
+  position: relative;
+  opacity: .8;
+  will-change: opacity;
+}
+
+/* ⚠ height:auto，不是 100%；没有 object-fit。图按宽度铺满，高度随它自己。
+
+   ⚠⚠ 选择器必须写两级（.home-install .install-bg img）。
+      全站有一条 `.inner-world img { width:100%; height:100%; object-fit:cover }`，
+      权重和 `.install-bg img` 一模一样、又写在后面，会把 height:auto 顶掉，
+      结果是图高 100% × 父高 0 = **整段高度变成 0**，所有滚动触发器全错。
+      HANDOFF 里 ALONE IN KYOTO 那次已经踩过同一条规则，这是第二次。
+
+   ⚠ aspect-ratio 是给「图还没下载完」那一瞬间用的：这一段的高度就是图的高度，
+     图没到 ScrollTrigger 就会按 0 高去算起止点。有了它，位置一开始就是对的。
+     换图时这个比例要跟着改（= 图宽 / 图高）。 */
+.home-install .install-bg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1920 / 2356;
+  object-fit: fill;
+}
+
+/* 文字层：铺满整段的透明罩（= 参考站的 .glitch-text-w）。 */
+.install-text-layer {
+  position: absolute;
+  inset: 0;
+}
+
+/* 钉住的那一屏（= .glitch-text-sticky-w）。
+   ⚠ 必须是透明的、不能 overflow:hidden——底图在它下面流过去，
+     给它底色就把图挡死了，这是上一版最大的错。 */
+.install-sticky {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+}
+
+.install-shards {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  color: var(--white);
+  pointer-events: none;
+}
+
+/* 字号和行高都是参考站线上实测的：视口 1536 下 font-size 17.28px = 1.125vw，
+   文字块 204×69、共 4 行 → 行高 69/4 = 17.25px，也就是 line-height ≈ 1。
+   ⚠ 上一版写的是 .73vw（1536 下只有 11px）和 line-height 1.5，两个都太小/太松，
+     是从参考图反推的，不如线上量的准。行高 1 看着紧是对的，参考站就是这么密。 */
+.install-shard {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  margin: 0;
+  /* 字级表 3 档。原值同上（1.125vw = 17.28px，参考站实测）。
+     ⚠ 它和 `.showreel-shard` 是同一种东西，必须一起改，不要各调各的。 */
+  font-size: var(--t-body);
+  line-height: 1;
+  /* 字距归零：原来是 .01em（17px 下只有 0.17px，肉眼无差别），
+     但它让正文档在扫描里分裂成两种写法。正文档一律不加字距。 */
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.install-shard .shard-line {
+  display: block;
+}
+
+/* 逐字碎裂的单位。JS 会把每行拆成 .install-char。 */
+.install-shard .install-char {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+
+/* 五个落点，在参考站线上量的（视口 1536×695，左上角相对**钉住那一屏**的百分比）。
+   ⚠ 横向和上一版从参考图量的结果差不到 0.1%，说明两次都量对了；
+     纵向修正了 2–3%——上一版是按参考图 1738px 的高度换算的，而实际参照系是视口高 695。
+   参考站的实现是一个 3列×2行 的格子、每格里放一个绝对定位的文字块（正中那一格是空的）；
+   这里直接用百分比落点，结果一样，少一层 DOM。 */
+.install-shard-a { --x: 10.4%; --y: 24.7%; }
+.install-shard-b { --x: 27.3%; --y: 10.4%; }
+.install-shard-c { --x: 74.3%; --y: 18.0%; }
+.install-shard-d { --x: 20.1%; --y: 48.3%; }
+.install-shard-e { --x: 78.6%; --y: 49.9%; }
+
+/* ---------- 逐字点亮的句子 + 两张飘浮图（2026-09-08 按参考站实测重做） ----------
+
+   ⚠ 原来这里是「黑幕 + 五张缩放弹入的图」，整套已作废：
+     · 黑幕 → 改成底图自己变暗（在 .install-bg 上做，见 setupInstall 的 ②）。
+       盖一层黑布迟早会和背景对不上、露出边；让图自己暗下去，背后什么颜色都对得上。
+     · 五张弹入 → 改成两张上浮（见下面的 .install-drift）。
+       参考站那一屏就是两张，而且不缩放、不弹跳。 */
+
+/* 线上实测：元素框 128×86 落在 (704, 200)，自带 translate(-63.8, -43.2)
+   —— 也就是 translate(-50%, -50%)。所以它是**以 45.8% / 28.8% 这个点为中心**摆的，
+   不是左上角对齐。宽 8.3%（很窄一栏，所以折成很多短行），
+   行高 86/5 行 ≈ 17.2px，和字号一样 → line-height 1。
+   ⚠ 字号**和四周的散落小字完全一样**，参考站这两处是同一个字号。 */
+.install-statement {
+  position: absolute;
+  z-index: 2;
+  /* 2026-09-16：用户要求把这句话放到屏幕正中间，随后 top 几经调整定为 35%。 */
+  top: 35%;
+  left: 50%;
+  /* 2026-09-16：用户要求把 INTO 挤到下一行——原 8.3%(≈126px) 刚好能塞下
+     "CEASELESSLY INTO"（124.3px），缩到 7.6%(≈115px) 后卡掉 INTO，
+     其余行最宽的一行只要 108.2px，不受影响，不会连带改动别的换行。 */
+  width: 7.6%;
+  /* 2026-09-16：用户要求往左挪，累计 5px（3px + 2px）。 */
+  transform: translate(calc(-50% - 5px), -50%);
+  margin: 0;
+  /* 字级表 3 档（原值 1.125vw = 17.28px，和上面两处碎裂小字同源）。 */
+  font-size: var(--t-body);
+  line-height: 1;
+  /* 字距归零，和另外两处碎裂小字保持一致（正文档一律不加字距）。 */
+  letter-spacing: normal;
+  color: var(--white);
+}
+
+/* ⚠ 词的外壳。逐字 span 是 inline-block，浏览器可以在任意两个之间断行——
+   没有这一层，这么窄的一栏会把单词从中间劈开（实测 "EVERY DOCU / MENT IS A DECISIO"）。
+   套一层同为 inline-block 的词壳，断点就只剩下词与词之间的空格。 */
+.install-statement .install-word {
+  display: inline-block;
+}
+
+/* 逐字点亮的单位。起始态写在 CSS 里，避免 JS 接管前闪一下整句。 */
+.install-statement .install-char {
+  display: inline-block;
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* ⚠ 这一层是 .home-install 的直接子元素，**不在 .install-text-layer 里**
+   （参考站同样：.img-glitch-w 和 .glitch-text-w 是兄弟）。
+   它只当坐标系用（高 0），两张图各自贴着段落底边往上飘。
+   ⚠ left/right 是 0 不是 var(--edge)：下面的 --x / --w 是按**整个视口宽**量的。
+   z-index 10 照搬参考站，压过 sticky 那一屏——sticky 会创建层叠上下文、按 0 参与排序。 */
+.install-drifts {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 外框负责"飘"，框里的图再各自反向错动一点（JS 的 ④）。
+   `aspect-ratio` 用 --r 而不是让图片自己撑：占位图和真素材比例不一样，
+   换图时版式不能跟着变；图内 cover，任何比例的素材都不会把框撑歪。 */
+.install-drift {
+  position: absolute;
+  bottom: 0;
+  left: var(--x);
+  width: var(--w);
+  aspect-ratio: var(--r);
+  margin: 0;
+  overflow: hidden;
+  will-change: transform;
+}
+
+/* 两张飘浮卡片保留原有定位和滚动变换，只加可点击的 button 重置。 */
+.install-drift--interactive {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* 图比框高 10%、顶边对齐 —— 照搬参考站实测（框 434×355 / 图 434×391 = 110%，
+   框 206×291 / 图 206×320 = 110%），静止时 translateY(0)。
+   这 10% 正好是框内视差的行程（JS 的 ④ 走 -8% 和 +10%），不多不少。 */
+.install-drift img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 110%;
+  object-fit: cover;
+  display: block;
+  will-change: transform;
+}
+
+/* 线上实测（视口 1536）：图1 left 379 宽 434 高 355；图2 left 951 宽 206 高 291。 */
+.install-drift-1 { --x: 24.67%; --w: 28.26%; --r: 1.222; }
+.install-drift-2 { --x: 61.91%; --w: 13.41%; --r: .708; }
+
+/* 窄屏：右侧那两组按原坐标会跑出屏幕，整体往里收，字号也放大一档。 */
+@media (max-width: 991px) {
+  .install-shard { font-size: clamp(11px, 2.1vw, 14px); }
+  /* 窄屏那句话回到左上、放宽一档——8.3% 在手机上只有二十几像素，一行放不下一个词。
+     字号跟着小字一起放大，两者同号这条关系保住。 */
+  .install-statement {
+    top: 14%;
+    left: 8%;
+    width: 40%;
+    transform: none;
+    font-size: clamp(11px, 2.1vw, 14px);
+  }
+  /* 两张图在窄屏拉开一点，避免挤在一起；比例和上浮机制不变。 */
+  .install-drift-1 { --x: 6%;  --w: 46%; }
+  .install-drift-2 { --x: 62%; --w: 26%; }
+  .install-shard-a { --x: 6%;  --y: 24%; }
+  .install-shard-b { --x: 34%; --y: 11%; }
+  .install-shard-c { --x: 46%; --y: 38%; }
+  .install-shard-d { --x: 8%;  --y: 58%; }
+  .install-shard-e { --x: 44%; --y: 72%; }
+}
+
+/* ----------------------------------------------------------------------
+   BREAK 开场：画面缩回电影院银幕
+   参考 noth.in 的同类段落——整屏影像随滚动被"推远"，落进场景里的一块屏幕。
+   实测参考站的做法：舞台 sticky 住整一屏，滚动行程也正好是一屏，
+   缩放全程线性（无缓动）。这里三点都照搬。
+
+   与参考站的唯一区别是几何锁定方式：参考站给背景和视频各写了一条缩放
+   （1.8→1 与 1.4→0.35），两条速率不同，视频中途会盖出屏幕之外；
+   这里改成整组只有一个变换，画面永远严丝合缝地等于银幕本身。
+   动的是"镜头"，不是两个各自缩放的元素。
+
+   .cinema-screen 的四个位置变量由 JS 每次 refresh 按银幕在素材里的实际
+   比例算出（含 object-fit: cover 的裁切补偿）。下面的默认值只是 JS 没跑起来
+   时的兜底，等于把素材当成正好铺满舞台来算。
+   ---------------------------------------------------------------------- */
+.home-cinema {
+  position: relative;
+  /* 舞台一屏 + 一屏行程，和参考站相同。 */
+  height: 200svh;
+  background: transparent;
+}
+
+.cinema-stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.cinema-camera {
+  --screen-x: 26.98%;
+  --screen-y: 27.95%;
+  --screen-w: 46.07%;
+  --screen-h: 40.19%;
+  position: absolute;
+  inset: 0;
+  /* 缩放支点必须是银幕中心（由 JS 写成像素值），不是舞台中心：
+     支点错了，画面会一边变大一边横着漂过去。 */
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.cinema-hall {
+  position: absolute;
+  inset: 0;
+}
+
+.cinema-screen {
+  position: absolute;
+  left: var(--screen-x);
+  top: var(--screen-y);
+  width: var(--screen-w);
+  height: var(--screen-h);
+  /* figure 自带 margin，绝对定位下仍然生效，不清会整块偏出银幕。 */
+  margin: 0;
+  overflow: hidden;
+}
+
+/* ⚠ 2026-09-08：银幕内容换成 video 之后必须补这条。
+   全站那条 `.inner-world img { width:100%; height:100%; object-fit:cover }` 只管 img，
+   video 不在它的范围里；不补的话视频会按自己的固有尺寸（2560×1440）撑出银幕。 */
+.cinema-screen video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-glitch {
+  position: relative;
+  height: 240svh;
+  background: transparent;
+}
+
+.glitch-sticky {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: var(--edge);
+}
+
+.glitch-final {
+  z-index: 2;
+  max-width: 12ch;
+  font-size: clamp(68px, 10.5vw, 170px);
+  line-height: .8;
+  letter-spacing: -.03em;
+  text-align: left;
+}
+
+.glitch-final .char {
+  display: inline-block;
+  opacity: .08;
+}
+
+.break-view-more {
+  z-index: 3;
+  position: absolute;
+  right: var(--edge);
+  bottom: 38px;
+  font-family: 'Jaldi', sans-serif;
+  font-size: 18px;
+}
+
+/* 结尾这一屏（2026-09-08）：不再被 .inner-world 的黑幕压着，露出首屏那套背景。
+   `.inner-world` 的黑幕是画在**它自己**身上的，页脚是它的子元素，
+   所以页脚自己铺一层背景就盖在黑幕之上了——不用去动那条幕布，
+   也就不会碰到 Works / Break 那一大段的转场。 */
+.home-footer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* 2026-09-16：用户要求这段（露出红底的镂空区）加长，累计 500px（300+200）；
+     同日又两次要求缩短，累计减 600px，改回 -100px。 */
+  min-height: calc(120svh - 1100px);
+  padding: clamp(120px, 15vw, 240px) var(--edge) 22px;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* ⚠ 2026-09-08 第二版。第一版是"复用 .hero-bg / .bg-purple 那两条渐变"，
+   用户看了说不对：他要的"红色背景"不是首屏顶部那片暗紫，
+   而是**穿过门之后整屏变红的那一屏**。
+
+   所以这里铺的是 `works-hero.jpg`——它是当初为 Works 段截的**真实渲染快照**
+   （门开满时的画面），不是手画的渐变，不碰 PITFALLS 那条"CSS 渐变画不出写实光影"。
+
+   三个必须的写法（都是当年 Works 段踩出来的，见历史记录）：
+   1. **`background-attachment: fixed`**：红是"一直在幕布后面"的东西，
+      黑幕在这里被挖开而已。不 fixed 的话红会跟着 2.7 屏高的页脚一起滚，
+      穿帮成"贴了一张图"。
+   2. **`background-size: 100% 100%`，不用 cover**：cover 保比例裁切，
+      换个窗口高度红光就横向延伸、位置会变；100% 100% 永远正好一屏。
+   3. **不要给它加噪点层**（`.hero-bg::after` 那条已经改回只作用于首屏）：
+      噪点是 `inset: -25%`，在页脚里没有容器兜住，会在黑幕上漏出一条硬边噪点带。 */
+.footer-bg {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: url("../assets/homepage/works-hero.jpg") center / 100% 100% no-repeat fixed;
+}
+
+/* 黑幕到红底的接缝：盖住页脚顶部 80svh，由黑化开到透明。
+   80svh 是按"slogan 必须完全落在纯红上"定的——slogan 顶边离页脚底约 1.7 屏，
+   接缝在 2.72 屏高的页脚里只占最上面 0.8 屏，中间还留 1.1 屏余量。
+   用一层普通渐变而不是 mask：mask 会把整个页脚提成一张要逐帧重算的图层。 */
+.home-footer::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  height: 80svh;
+  background: linear-gradient(180deg, var(--inner-black) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+/* 内容必须站到那层渐变之上，否则会被它压住。
+   （.footer-meta 原来只写了 z-index，没有 position，等于没生效——一并补上。） */
+.footer-images,
+.footer-cta,
+.footer-meta,
+.footer-wordmark,
+.footer-signature {
+  position: relative;
+  z-index: 2;
+}
+
+.footer-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 3vw, 48px);
+  width: min(68vw, 1000px);
+  height: min(35svh, 390px);
+  margin: 0 0 clamp(100px, 13vw, 205px) auto;
+}
+
+.footer-images img {
+  min-width: 0;
+  object-fit: cover;
+}
+
+.footer-cta {
+  margin: auto 0 clamp(110px, 13vw, 190px);
+}
+
+.footer-cta h2 {
+  /* 2026-09-16：用户要求换成全站 slogan 字体字号（General Sans/Jaldi + --t-big，
+     和 Works slogan / BREAK 叙述字同一套）。原来是给两词短句用的巨型 Bebas Neue
+     （clamp 96–276px + 9ch 窄栏），现在句子长了很多，一并放宽换行宽度。 */
+  max-width: 55ch;
+  /* 2026-09-16：撤回"置顶固定"的做法（用户明确说没让 pin），改回普通文档流，
+     只做水平居中：块本身居中 + 文字居中。上移累计净 600px（800px 上移后又
+     下移 200px），margin-bottom 同步补偿到 548px，让下面的 <a> 不跟着动。
+     同日用户再要求缩短 slogan 到页面底部的滚动距离，margin-bottom 减 200px → 348px。 */
+  margin: 0px auto 348px;
+  text-align: center;
+  font-family: 'General Sans', 'Jaldi', sans-serif;
+  font-weight: 400;
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1.15;
+  letter-spacing: normal;
+}
+
+/* 2026-09-16：Email/Resume 挪到 .footer-signature 这一行，和 ©2026 Minnie Zhuang /
+   Site-Visuals 四项拉平成同级，靠 .footer-signature 的 justify-content: space-between
+   均匀分布，字体字号继承（Jaldi + var(--t-body)），不再单独设字体。 */
+
+.footer-meta {
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 32px;
+  /* 字级表 3 档。原来 15px——它和正文 17px、和标签 12px 都不是一档，
+     是夹在中间的第三个数。归到正文。 */
+  font-size: var(--t-body);
+}
+
+.footer-meta p {
+  margin: 0;
+}
+
+.footer-meta nav {
+  display: flex;
+  gap: clamp(18px, 3vw, 46px);
+}
+
+/* 落款大字（2026-09-08 按用户原型图重做）
+   原来的写法是 `font-size: clamp(60px, 10vw, 162px)`——字号和容器宽度没有关系，
+   1536 宽的窗口下字只有 1268px，右边空掉 131px，读起来像"这行字没写完"。
+   原型图里它是**从左内容线一直顶到右内容线**的。
+
+   所以字号改成跟着容器宽度算：
+   - 外层 `.footer-wordmark` 只做一件事——**当量宽度的尺子**（`container-type: inline-size`）。
+     ⚠ 尺子必须是这个小盒子，**不能挂到 `.home-footer` 上**：`container-type` 会让元素
+     变成固定定位后代的包含块，而页脚里的 `.footer-bg` 靠 `background-attachment: fixed`
+     才不会跟着滚（见上面那段注释），挂上去有把红底弄坏的风险。
+   - 里层 `span` 的字号 = `12.02cqw`，也就是容器宽度的 12.02%。
+     这个系数是量出来的：这串字在 Special Gothic Expanded One 下、
+     算上 -.018em 的字距，一个字号能铺开 9.00 倍宽度，100 ÷ 9.00 = 11.11。
+     **换文案或换字体就要重新量**（量法：把整行选中取 `Range.getBoundingClientRect().width`，
+     加上一个 letter-spacing 的量，再除以当时的字号）。
+   - 前面那条 vw 版是给不支持容器查询的老浏览器兜底的，别删。 */
+.footer-wordmark {
+  container-type: inline-size;
+  margin-top: 38px;
+}
+
+.footer-wordmark span {
+  display: block;
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: clamp(60px, 10.2vw, 300px);
+  font-size: 11.114cqw;
+  /* 对齐的是**笔画**，不是字盒：T 的左边天生留 .012em 空白。补掉它，
+     字才真的压在左内容线上。 */
+  margin-left: -.012em;
+  line-height: .8;
+  /* 字距是从用户原型图量出来的，不是调出来的（2026-09-08 第二版）：
+     原型图里笔画外框 2795×233，宽 ÷ 高 = 12.00。这个比值和字号无关，
+     只由字距决定——字距越松，同样宽度里字就越矮。
+     本字体在字距 0 时这个比值是 12.28，每收紧 .001em 比值降 .016，
+     反推得 -.018em。（原来是 -.07em，比值 11.16，T 和 H 会粘在一起。）
+     ⚠ 字距和上面的 cqw 系数是**绑死的一对**：改字距必须重算系数，
+     否则整行会溢出内容线或者又缩回去。 */
+  letter-spacing: -.018em;
+  white-space: nowrap;
+  color: var(--inner-red);
+}
+
+/* 大字下面那行小字：左边版权，右边署名。
+   贴着大字放（原型图里两者几乎挨着），所以间距按大字的高度给一个小值。 */
+.footer-signature {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  margin-top: clamp(12px, 1.4vw, 22px);
+  font-family: 'Jaldi', sans-serif;
+  /* 字级表 3 档（原来 15px，和上面 .footer-meta 同一个理由）。 */
+  font-size: var(--t-body);
+}
+
+.footer-signature p {
+  margin: 0;
+}
+
+.footer-signature a {
+  color: var(--inner-white);
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* 卡片级反馈只作用于图带；文字与版式不发生位移。 */
+  .work-item .work-strip {
+    transition: filter 360ms cubic-bezier(.16, 1, .3, 1);
+  }
+
+  .work-strip:hover,
+  .work-strip:focus-visible {
+    filter: brightness(1.07) saturate(1.04);
+  }
+
+  /* ⚠ 2026-09-09：`.works-outro a` 已从这两条里摘出去。
+     参考站的 View all 悬停时文字**一个像素不动、不变色**，全部动作只有右边那个箭头。
+     其余链接（项目标题、BREAK、页脚）的变红行为一律没动。 */
+  .work-title-link,
+  .work-explore,
+  .break-view-more,
+  .footer-cta a,
+  .footer-meta a,
+  .footer-signature a {
+    transition: color 180ms ease-out;
+  }
+
+  .work-title-link:hover,
+  .work-explore:hover,
+  .break-view-more:hover,
+  .footer-cta a:hover,
+  .footer-meta a:hover,
+  .footer-signature a:hover {
+    color: var(--inner-red);
+  }
+
+  /* 「View all」的悬停：箭头以左端为轴横向拉长到两倍，0.5 秒，两头慢中间快。
+     三个数都是从参考站量出来的：终点 scaleX(2)、时长约 500ms、
+     缓动实测（100ms→1.024 / 200ms→1.269 / 300ms→1.79 / 416ms→1.994）
+     与 cubic-bezier(.65,0,.35,1) 吻合。 */
+  .works-outro .view-all-arrow {
+    transition: transform 500ms cubic-bezier(.65, 0, .35, 1);
+  }
+
+  .works-outro .view-all:hover .view-all-arrow,
+  .works-outro .view-all:focus-visible .view-all-arrow {
+    transform: scaleX(2);
+  }
+
+  .work-explore:hover { opacity: .72; }
+
+  /* 所有项目标题统一使用红色片头细线与位移反馈。 */
+  .work-title-link,
+  .work-item:nth-child(1) .work-explore,
+  .work-item:nth-child(3) .work-explore {
+    position: relative;
+    display: inline-block;
+    isolation: isolate;
+    transition:
+      color 360ms cubic-bezier(.16, 1, .3, 1),
+      transform 360ms cubic-bezier(.16, 1, .3, 1);
+  }
+
+  .work-title-link::after,
+  .work-item:nth-child(1) .work-explore::after,
+  .work-item:nth-child(3) .work-explore::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    height: 1px;
+    background: currentColor;
+    pointer-events: none;
+    transition: transform 420ms cubic-bezier(.16, 1, .3, 1);
+  }
+
+  .work-title-link::after {
+    right: 0;
+    bottom: -3px;
+    color: var(--inner-red);
+    transform: scaleX(0);
+    transform-origin: right center;
+  }
+
+  .work-item:nth-child(1) .work-explore,
+  .work-item:nth-child(3) .work-explore {
+    border-bottom: 0;
+  }
+
+  .work-item:nth-child(1) .work-explore::after,
+  .work-item:nth-child(3) .work-explore::after {
+    right: 0;
+    bottom: -3px;
+    transform: scaleX(1);
+    transform-origin: right center;
+  }
+
+  .work-title-link:hover,
+  .work-item:nth-child(1) .work-explore:hover,
+  .work-item:nth-child(3) .work-explore:hover {
+    color: var(--inner-red);
+    opacity: 1;
+    transform: translateX(5px);
+  }
+
+  .work-title-link:hover::after {
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+
+  .work-item:nth-child(1) .work-explore:hover::after,
+  .work-item:nth-child(3) .work-explore:hover::after {
+    transform: scaleX(1.55);
+    transform-origin: left center;
+  }
+}
+
+.work-strip:focus-visible {
+  outline: 1px solid var(--inner-red);
+  outline-offset: 8px;
+}
+
+@media (max-width: 991px) {
+  .inner-world { margin-top: -100svh; }
+
+  .home-showreel { height: 410svh; padding-top: 100svh; }
+  .showreel-video-stage { height: auto; margin-top: 24px; }
+  .showreel-video-pin { position: relative; top: auto; width: 100vw; height: auto; margin-left: calc(var(--edge) * -1); }
+  .showreel-video-pin .showreel-scroll-track { height: 58svh; }
+  .showreel-video-pin .showreel-note { position: relative; right: auto; bottom: auto; left: auto; padding: 52px 0 90px; }
+  .showreel-note { grid-template-columns: 1fr; }
+  .showreel-note p:last-child { grid-column: 1; }
+
+  .home-works { min-height: auto; }
+  .works-intro { min-height: auto; margin-bottom: 0; padding-bottom: 110px; }
+  /* 窄屏不跑 setupWorks()（它要求 innerWidth >= 992），所以桌面端那两条为动效服务的
+     设置在这里都要写回去：
+     ① `justify-content` 回 space-between，否则五个字母会静态挤在右上角；
+     ② `margin-top` 归零——桌面端把初始位置下移到了 `Work` 那一行，
+        窄屏没有这回事，不归零会凭空多出 132px 空隙。 */
+  .works-sticky-word { top: var(--works-sticky-top); margin-top: 0; margin-bottom: 24px; font-size: 12px; justify-content: space-between; }
+  /* 桌面端 `Work` 被五字母取代所以隐藏了；窄屏五字母不在那个位置，标签要留着。 */
+  .works-index { display: block; }
+  .works-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: none; row-gap: 86px; }
+  .work-item,
+  .work-item:nth-child(n) { grid-row: auto; align-self: start; }
+  /* 移动端是单列堆叠、grid-row 全部重置成 auto，桌面端那套行号在这里不起作用，
+     所以顺序改用 order 再声明一遍，保持和桌面端一致（编号含义见上面桌面端那段）。 */
+  .work-item:nth-child(1) { order: 1; }
+  .work-item:nth-child(3) { order: 2; }
+  .work-item:nth-child(4) { order: 3; }
+  .work-item:nth-child(5) { order: 4; }
+  .work-item:nth-child(2) { order: 5; }
+  .work-item:nth-child(-n + 2) { grid-column: 1 / 7; }
+  .work-item:nth-child(3n + 1) { grid-column: 1 / 7; }
+  .work-item:nth-child(3n + 2) { grid-column: 3 / 7; }
+  .work-item:nth-child(3n) { grid-column: 1 / 7; }
+  .work-image-wrap,
+  .work-item:nth-child(n) .work-image-wrap { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+  .work-item:nth-child(3n) .work-image-wrap { aspect-ratio: 343 / 550; }
+  .work-item:nth-child(-n + 2) .work-link { display: flex; flex-direction: column; align-items: stretch; }
+  .work-item:nth-child(-n + 2) .work-image-wrap { order: 0; aspect-ratio: 16 / 10; }
+  .work-item:nth-child(-n + 2) .work-tags { order: 1; margin-top: 18px; margin-bottom: 18px; }
+  .work-item:nth-child(-n + 2) .work-link h3 { order: 2; }
+  .work-item:nth-child(-n + 2) .work-link p { order: 3; }
+  .work-item:nth-child(-n + 2) .work-link > span { order: 4; }
+  /* ===== 新版图带（第 1、2 条）在窄屏 =====
+     桌面端的左右分栏在这里全部塌成上下堆叠：图带在上、文字在下，两条一样。
+     `.work-link` 变成 flex 之后，桌面端那些 grid-column 自动失效，不用逐条清。
+
+     ⚠ 图带高度必须换一个比例：桌面端的 28.76% 是按内容宽 1414 算的，
+     窄屏内容宽只有三百多，照抄会矮成一条缝（343 宽时只有 98px）。
+     这里用 56%，343 宽时约 192px，两格并排仍然读得出来。 */
+  .work-item[data-work-layout="strip"] .work-link {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    row-gap: 20px;
+  }
+  /* 窄屏单列恢复左侧内距，保持段落可读性。 */
+  .work-item:nth-child(5) .work-info {
+    align-items: flex-start;
+    padding-left: var(--work-text-inset);
+    padding-right: 0;
+    text-align: left;
+  }
+  .work-item:nth-child(5) .work-tags { justify-content: flex-start; }
+  .work-item:nth-child(5) .work-summary { text-align: left; }
+  .work-item[data-work-layout="strip"] .work-strip { order: 0; height: 56cqw; }
+  .work-item[data-work-layout="strip"] .work-info { order: 1; }
+  /* 抵消上面那条通用的 `aspect-ratio: 1/1`——图带格子的高度由 .work-strip 统一给。
+     和它同特异性 (0,2,0)，靠写在后面取胜。 */
+  .work-item[data-work-layout="strip"] .work-cell,
+  .work-item[data-work-layout="strip"] .work-image-wrap {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+  /* 窄屏把正文收一档；标签和公司行本来就是小字，不动。
+     前缀同样不能省，理由见桌面端那两条的注释（`.work-link p` 会压过来）。 */
+  .work-item[data-work-layout="strip"] .work-summary { width: auto; max-width: 100%; font-size: 15px; }
+  /* ⚠ 上面那批 `nth-child(-n+2) ... { order: N }` 是给旧版式写的，会命中新卡。
+     新版四行都在 `.work-info` 这个 flex 列里，任何 order 都会打乱顺序。
+     全部压回 0，让它们老老实实按 HTML 顺序排。
+     （实测当前那几个 order 值恰好也能排对，但那是巧合，不能依赖。） */
+  .work-item[data-work-layout="strip"] .work-info > * { order: 0; }
+  /* 桌面端为了把栅格缝补到 33.7 加的 8.4px，在窄屏是单列堆叠，不需要。 */
+  .work-item:nth-child(4),
+  .work-item:nth-child(5) { padding-left: 0; padding-right: 0; }
+  /* 「标签甩到右边」那套三列网格在窄屏放不下（正文列写死 48cqw，手机上只剩一百多像素），
+     整个塌回单列堆叠，标签回到最上面一行、左对齐，和其余四条一致。 */
+  .work-item[data-work-tags="right"] .work-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-right: 0;
+  }
+  .work-item[data-work-tags="right"] .work-tags {
+    justify-content: flex-start;
+    margin: 0 0 clamp(20px, 2vw, 34px);
+  }
+  /* 窄屏是上下堆叠，文字不再靠着页面边缘，缩进取消。 */
+  .work-item[data-work-layout="strip"] .work-info { padding-left: 0; padding-right: 0; }
+
+  .home-studio-video { height: 100svh; }
+  .studio-video-media { transform: none !important; }
+
+  .home-studio,
+  .home-people { display: block; padding-top: 120px; }
+  .break-intro,
+  .studio-services,
+  .falling-statement,
+  .home-people > h2,
+  .people-columns,
+  .people-image { margin-bottom: 92px; }
+  .people-image { height: 62svh; }
+
+  /* 参考站那套「左小图缩进下沉 + 右大图」是横向构图，窄屏放不下，
+     改成单列顺序堆叠：标题 → 段落 → 大图 → 小图 + 说明。
+     缩进和下沉一并取消，否则小图会窄得看不清。 */
+  .break-intro { display: block; }
+  /* 窄屏不跑 setupBreakWord()（同 Works，要求 innerWidth >= 992），
+     写回 flex-start 保持原来的静态左对齐，不然会平白挤到右上角。 */
+  .break-sticky-word { justify-content: flex-start; }
+  .break-project-info { display: block; padding-left: 88.2875px; }
+  .break-project-info .work-tags { margin: 0 0 18px; flex-wrap: wrap; }
+  .break-lead p { max-width: none; }
+  .break-lead { margin-top: 28px; }
+  .break-wide { width: 100%; margin-top: 52px; }
+  .break-shot { width: 100%; margin-left: 0; margin-top: 52px; }
+  /* 高度交给 aspect-ratio，这里只放宽宽度；写死 height 会让三张图的纵向关系走形。 */
+  .break-robot-stage { width: 100%; margin-left: 0; }
+  .studio-services { display: block; }
+  .studio-services h3 { margin-bottom: 64px; }
+  .people-columns { display: grid; grid-template-columns: 1fr 1fr; }
+  .falling-statement { min-height: 110svh; font-size: 12vw; }
+  .falling-statement p { top: 30svh; }
+
+  /* 移动端不跑推远动画（JS 里同一条判断），留一屏行程就够，
+     直接呈现"画面已经在银幕里"的终态。 */
+  .home-cinema { height: 100svh; }
+
+  .home-glitch { height: 190svh; }
+
+  .home-footer { min-height: 100svh; }
+  .footer-images { width: 100%; }
+}
+
+@media (max-width: 560px) {
+  .showreel-media { height: 58svh; }
+  .works-intro h2 { font-size: var(--slogan-size); }
+  .works-grid { row-gap: 68px; }
+  .work-link h3 { font-size: 42px; }
+  .studio-services h3 { font-size: 18vw; }
+  .people-image { height: 54svh; }
+  .break-shot { width: 100%; }
+  .people-columns { grid-template-columns: 1fr; }
+  .glitch-final { font-size: 17vw; }
+  .footer-images { height: 28svh; }
+  .footer-cta h2 { font-size: 20vw; }
+  .footer-meta { flex-direction: column; }
+  .footer-meta nav { flex-wrap: wrap; }
+  /* 大字不用再单独给窄屏字号：它现在是按容器宽度算的，本来就永远正好铺满。
+     小字两段在窄屏放不下一行，改成上下两行。 */
+  .footer-signature { flex-direction: column; gap: 6px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .inner-world {
+    background: #0d080f;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-image,
+  .parallax-frame img,
+  .studio-video-media img {
+    transform: none !important;
+  }
+
+  .glitch-final .char {
+    opacity: 1 !important;
+  }
+
+  .falling-statement .fall-char {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  /* 推远动画不跑，行程也就不需要了；直接呈现画面在银幕里的终态。 */
+  .home-cinema { height: 100svh; }
+}
+
+
+/* ======================================================================
+   入场动画（2026-09-04 新增）
+   ======================================================================
+
+   开场不是"加载动画"，是一次开灯：先是全黑，门里的光慢慢亮起来，
+   光顺着地面铺到脚下，最后标题从底下擦上来。
+
+   与滚动动画的分工（这是最要紧的一条）：
+   滚动那一套每帧都在往 .hero 上写 CSS 变量（--left-x / --eyebrow-x /
+   --clip-* …），入场动画**一个都不许碰**，否则两边会互相覆盖、抢同一个属性。
+   所以入场只走这几条它从来不用的通道：
+     · #portal-canvas 的 opacity        （滚动不管它）
+     · .title-row 的 transform / filter （滚动只管 .word 的 transform，父子两层互不干扰）
+   小字那一条是唯一的例外：它的 transform 被滚动占着，所以给它加了一个
+   独立的 --intro-eyebrow-y，缺省是 0，动画放完就回到 0，等于没动过；
+   透明度也不能抢 opacity（滚动在用），改用 filter: opacity()。
+
+   起始状态挂在 <html class="intro-armed"> 上，由 <head> 里的一行内联脚本
+   在首帧之前打上——必须在首帧之前，否则会先闪一下完整画面再变黑。
+   同一行脚本还带一个 4 秒的保险：万一 JS 挂了，黑幕也会自己撤掉，
+   不会把整个页面永远盖住。 */
+
+/* 开场的黑场。不是纯黑——中间透一点点首屏那个紫，而且紫斑就落在门洞的位置上。
+   两个作用：加载那一幕不至于是一块死黑的板；黑幕撤掉时它已经和真正的背景
+   有七八分像，所以撤的过程更像雾散开，不像揭幕布。
+   注意浓度要压得很低（比 --bg-purple 暗得多），一眼看上去仍然该是黑的。 */
+.intro-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  /* 色号不是挑的，是量出来的：首屏背景最紫的那一档就是 rgb(21,2,26)，
+     底色是 rgb(9,1,14)。黑幕比它再压暗一点点，于是撤幕时画面只会变亮、
+     不会先变暗——顺序反了会看出"揭掉了一层东西"。 */
+  background:
+    radial-gradient(120% 92% at var(--door-x) var(--door-top),
+      #120218 0%,
+      #0b0111 34%,
+      #050008 66%,
+      #000 100%);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* ---------- 加载动效 ----------
+   构图上只有两样东西，都压在门洞将要出现的那个点上：一条发丝细的进度条，
+   和一个三位数。位置直接用 --door-x / --door-top，所以不管窗口多大，
+   进度条一定长在门洞正中——"进度条变成门洞"这件事才对得上。
+
+   进度条**不改 width/height**，只改 transform：
+   盒子本身就按门洞的真实尺寸做（由 JS 量出来写进来），
+   一开始用 scaleX 拉宽、scaleY 压扁成一条线，加载满之后两个 scale 都回到 1，
+   于是它自己就收成了门洞的形状。全程只有合成，不触发重排。 */
+
+/* 这一层是**一个零尺寸的锚点**，钉在门洞正中心，本身不占地方。
+   两个孩子都相对它绝对定位、各自居中。
+   为什么不让它有尺寸再靠 translate(-50%,-50%) 居中：进度条被 scaleY 压扁之后，
+   它的**布局高度**还是门洞那么高（transform 不改布局），
+   于是这一层的盒子高度会被撑成一个不好预测的值，居中就偏了——实测偏了 24px。
+   锚点没有尺寸，就没有这个问题。 */
+.intro-loader {
+  position: fixed;
+  left: var(--door-x);
+  top: var(--door-top);
+  width: 0;
+  height: 0;
+  z-index: 320;                 /* 压在黑幕（300）上面 */
+  pointer-events: none;
+  opacity: 0;
+}
+
+html.intro-armed .intro-loader { opacity: 1; }
+
+/* 进度条。用户给了参考图，最终定的就是这个样子：
+   **实心、硬边、有厚度的一小条洋红**，黑底上就它一个。
+
+   走过的弯路（别再回去，见 PITFALLS）：
+     · 第一版"灰轨道 + 填充 + 从左往右"——软件安装进度条的长相，被否。
+     · 第二版把两端做成化开的柔光——我自己加的，参考图里是切齐的硬边。
+       "没有轨道"和"从中间往两边长"这两条留了下来，虚化那条去掉。
+
+   颜色不是 #C30750，是**点亮之后**的门那个色（实测 rgb(228,19,77)）。
+   它接下来要和真正的门交叉淡出，用没点亮的色号会在交接处暗一下。
+
+   尺寸不写死：盒子就是门洞那么大，粗细和长度全靠 transform 撑出来，
+   所以"变成门洞"只是把两个 scale 收回 1。全程只有合成，不重排。 */
+.loader-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: rgb(228, 19, 77);
+  transform-origin: 50% 50%;
+}
+
+/* 那条光的光晕。**必须是独立一层，不能给 .loader-bar 加 box-shadow / drop-shadow。**
+   进度条是靠 scaleX 拉长、scaleY 压扁做出来的（横向放大约 9 倍、纵向压到 0.06），
+   阴影和滤镜会跟着这个各向异性的缩放一起变形——横着糊出一千多像素，
+   竖着又被压得看不见。所以光晕单独一层，自己算自己的缩放。
+
+   盒子同样是门洞那么大，背景是个径向渐变；被压扁拉长之后，圆自然变成一条
+   横向的椭圆晕——那正好就是一条细亮线周围该有的样子。 */
+.loader-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side,
+    rgba(228, 19, 77, 0.50) 0%,
+    rgba(228, 19, 77, 0.20) 42%,
+    rgba(228, 19, 77, 0.06) 68%,
+    transparent 100%);
+}
+
+/* 曾经这里还有一个百分比数字（.loader-count），2026-09-05 去掉了：
+   条的长度已经把进度说清楚了，再加一行数字是同一件事说两遍。
+   整幕只剩一条光，也就没有任何东西在提示"这是一个加载界面"。 */
+
+/* 标题的展开遮罩：从正中间一小块，往两边推到满。
+   --intro-r 是展开进度（0 到 1，由 GSAP 推），
+   --intro-feather 是边缘化开的宽度——两边的字是"浮现"出来的，不是被切出来的，
+   所以边界必须是一段渐变，不能是硬边。单位用 em：跟着标题字号走，
+   窗口变宽变窄时羽化的比例不变。
+
+   四个色标的位置这样排，是为了 r=0 时不塌：
+     r=0 → 中间一块 2×feather 宽的柔光斑（刚好是"先出现中间"那一下）
+     r=1 → 两端的透明色标被推到画面外，整行全实
+   如果把羽化放在黑色区域内侧，r=0 时色标顺序会反过来，浏览器一钳位就变成
+   只显示右半边——这个坑踩过，别改回去。 */
+.title-row.intro-reveal {
+  --intro-r: 0;
+  --intro-feather: 0.3em;
+  --intro-edge: calc(50% * var(--intro-r));
+  --intro-mask: linear-gradient(to right,
+    transparent calc(50% - var(--intro-edge) - var(--intro-feather)),
+    #000        calc(50% - var(--intro-edge)),
+    #000        calc(50% + var(--intro-edge)),
+    transparent calc(50% + var(--intro-edge) + var(--intro-feather)));
+  -webkit-mask-image: var(--intro-mask);
+          mask-image: var(--intro-mask);
+}
+
+html.intro-armed .intro-veil     { opacity: 1; visibility: visible; }
+html.intro-armed #portal-canvas  { opacity: 0; }
+html.intro-armed .site-nav       { opacity: 0; }
+html.intro-armed .eyebrow        { filter: opacity(0); }
+html.intro-armed .title-row      { filter: opacity(0); }
+
+/* 关掉动画偏好时直接给最终状态，不播时间轴。 */
+@media (prefers-reduced-motion: reduce) {
+  html.intro-armed .intro-veil    { opacity: 0; visibility: hidden; }
+  html.intro-armed .intro-loader  { opacity: 0; }
+  html.intro-armed #portal-canvas { opacity: 1; }
+  html.intro-armed .site-nav      { opacity: 1; }
+  html.intro-armed .eyebrow       { filter: none; }
+  html.intro-armed .title-row     { filter: none; }
+}
+
+
+/* ======================================================================
+   大标题 hover：跟焦（rack focus）
+   逻辑在 js/homepage-portal-title-focus.js，那里写了为什么是"对焦"。
+
+   底下这几行只负责一件事：把 JS 每帧写的 --fx（焦点在这一行的哪个位置）
+   变成"哪一段清晰、哪一段化开"。
+   ====================================================================== */
+
+/* 真标题：整体变虚。--defocus-live 由 JS 每帧写（已量化成 2px 一档，
+   因为模糊半径每变一次，整行就要重新栅格化一次）。
+   静止时 focus-on 摘掉，filter 一并消失，回到样式表状态。
+   注意：入场动画也用 .title-row 的 filter —— 两者靠 JS 那道闸门
+   （入场没演完就不点火）保证永不同时在场。 */
+.title-row.focus-on { filter: blur(var(--defocus-live, 0px)); }
+
+/* 清晰的那一份拷贝，盖在上面，只在焦点窗口里露出来。
+
+   **必须是 .title-row 的兄弟，不能是它的孩子** —— 父元素的 filter 会作用到
+   所有后代，放进去的话它会跟着一起虚，等于白做。位置由 JS 按真标题量出来的
+   矩形写死（left/top/width/height），所以两层严丝合缝。
+   它也带 .title-row 类，为的是继承同一套排版；但绝对定位下 margin 仍然生效，
+   所以这里必须把 .title-row 那两个 margin 清掉，否则会整体偏出去。 */
+.title-sharp {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+
+  /* 焦点落在 --fx，向两侧衰减。**是横向的带，不是圆洞**：
+     画面里所有字母离镜头一样远，焦点落在某处、向两侧化开，读起来才是景深；
+     挖个圆洞会读成"有盏灯在照它"，那就成了手电筒（这个站栽过一次）。 */
+  --fr: var(--focus-span, 1.5em);
+  --fc: calc(var(--fr) * var(--focus-core, 0.35));
+  --focus-mask: linear-gradient(to right,
+    transparent 0,
+    transparent calc(var(--fx, 50%) - var(--fr)),
+    #000        calc(var(--fx, 50%) - var(--fc)),
+    #000        calc(var(--fx, 50%) + var(--fc)),
+    transparent calc(var(--fx, 50%) + var(--fr)),
+    transparent 100%);
+  -webkit-mask-image: var(--focus-mask);
+          mask-image: var(--focus-mask);
+}
+
+.title-row.focus-on ~ .title-sharp { visibility: visible; }
+
+/* 拷贝里的字沿用同一套 .word 规则（滚动一动两层同步走），
+   但不需要第二份图层提升——每帧真正在动的是这一层的遮罩。 */
+.title-sharp .word { will-change: auto; }
+
+/* 关掉动画偏好时这一层根本不存在（JS 那边也直接 return，双保险）。 */
+@media (prefers-reduced-motion: reduce) {
+  .title-sharp { display: none; }
+  .title-row.focus-on { filter: none; }
+}
+
+/* ===== 7. Works 详情弹窗（Home 专用） =====
+   结构/视觉照抄 site/works/css/works.css 的 .works-detail 那一套，
+   class 加 home- 前缀避免和 Works 页撞名；数据和图片直接引用
+   site/works/ 下的同一份文件（js/homepage-works-detail.js），内容只有一份。
+   只服务 Works 轮播那四张精选卡片；关闭后留在 Home，不跳转页面。 */
+
+.home-works-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* 盖过 .site-nav(100) 和门洞 3D canvas */
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(5, 2, 8, .98);
+  clip-path: inset(50% 30.0001% 50.0002% 30.0003%);
+  transition: opacity .5s ease, clip-path .6s cubic-bezier(.16, 1, .3, 1);
+}
+
+.home-works-detail.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  clip-path: inset(0% 0.0001% 0.0002% 0.0003%);
+}
+
+.home-works-detail-stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.home-works-detail-pages {
+  position: absolute;
+  pointer-events: auto;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 72%;
+  padding: 0 0 0 var(--edge);
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+}
+
+.home-works-detail-pages::-webkit-scrollbar { display: none; }
+
+.home-works-detail-page {
+  flex: 0 0 auto;
+  height: 88%;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.home-works-detail-info { position: absolute; top: calc(72vh + 18px); left: var(--edge); max-width: 46ch; }
+
+.home-works-detail-name-zh {
+  font-family: 'DengXian', '等线', sans-serif;
+  font-size: 15px;
+  letter-spacing: .02em;
+  color: var(--white);
+}
+
+.home-works-detail-desc {
+  margin-top: 10px;
+  width: 390px;
+  max-width: calc(100vw - 2 * var(--edge));
+  color: rgba(242, 239, 236, .58);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: 'DengXian', '等线', 'Jaldi', sans-serif;
+  white-space: pre-wrap;
+  text-align: justify;
+}
+
+.home-works-detail-links { position: absolute; left: var(--edge); bottom: 45px; display: flex; gap: 24px; pointer-events: auto; }
+
+.home-works-detail-link {
+  position: relative;
+  color: rgba(242, 239, 236, .58);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-decoration: none;
+  transition: color .3s ease;
+}
+
+.home-works-detail-link::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -2px;
+  height: 1px;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .4s cubic-bezier(.16, 1, .3, 1);
+}
+
+.home-works-detail-link:hover { color: var(--white); }
+.home-works-detail-link:hover::after { transform: scaleX(1); }
+
+.home-works-close {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(242, 239, 236, .26);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--white);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: border-color .3s ease;
+}
+
+.home-works-close:hover { border-color: var(--white); }
+
+.home-works-detail-nav { position: absolute; right: var(--edge); bottom: 45px; display: flex; gap: 20px; }
+
+.home-works-nav-btn {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: rgba(242, 239, 236, .58);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: color .3s ease, transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+.home-works-nav-btn:hover { color: var(--white); transform: scale(1.08); }
+
+.home-works-nav-btn:disabled {
+  color: rgba(242, 239, 236, .22);
+  cursor: default;
+  pointer-events: none;
+}
+.home-works-nav-btn:disabled:hover { color: rgba(242, 239, 236, .22); transform: none; }
+
+.home-works-nav-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+#homeNavPrev::after { left: -8px; }
+#homeNavNext::after { right: -8px; }
+.home-works-nav-btn:hover::after { transform: scaleY(1); }
+
+@media (max-width: 900px) {
+  .home-works-detail-pages { height: 66%; padding: 0 var(--edge); }
+  .home-works-detail-page { height: 76%; }
+  .home-works-detail-info { right: var(--edge); bottom: 104px; }
+  .home-works-detail-nav { right: var(--edge); bottom: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-works-detail { transition: opacity .3s ease; clip-path: none; }
+}
+
+/* ===== 7.1 BREAK / ALONE IN KYOTO 详情弹窗（Home 专用） =====
+   视觉与 Break 总览页的详情阅读器同构：正式详情图在右侧竖向阅读，项目说明留在左侧。
+   只服务 Home 里的 Kyoto 入口，数据仍来自 ../break/js/break-data.js。 */
+.home-break-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(5, 2, 8, .98);
+  clip-path: inset(50% 30.0001% 50.0002% 30.0003%);
+  transition: opacity .5s ease, clip-path .6s cubic-bezier(.16, 1, .3, 1);
+}
+
+.home-break-detail.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  clip-path: inset(0% 0.0001% 0.0002% 0.0003%);
+}
+
+.home-break-detail-stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.home-break-detail-pages {
+  position: absolute;
+  top: 0;
+  right: 5px;
+  bottom: 96px;
+  width: min(68vw, 1040px);
+  padding-top: 4.32vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: auto;
+  cursor: grab;
+  scrollbar-width: none;
+}
+
+.home-break-detail-pages::-webkit-scrollbar { display: none; }
+.home-break-detail-pages.is-dragging { cursor: grabbing; }
+
+.home-break-detail-page {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 63.36vh;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.home-break-detail-info {
+  position: absolute;
+  bottom: 120px;
+  left: var(--edge);
+  max-width: 46ch;
+}
+
+.home-break-detail-name {
+  color: var(--white);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px;
+  letter-spacing: .03em;
+}
+
+.home-break-detail-desc {
+  width: 324px;
+  max-width: calc(100vw - 2 * var(--edge));
+  margin: 10px 0 0;
+  color: rgba(242, 239, 236, .58);
+  font-family: 'DengXian', '等线', 'Jaldi', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: justify;
+}
+
+.home-break-close {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(242, 239, 236, .26);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--white);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: border-color .3s ease;
+}
+
+.home-break-close:hover { border-color: var(--white); }
+
+@media (max-width: 900px) {
+  .home-break-detail-pages {
+    right: var(--edge);
+    left: var(--edge);
+    bottom: 154px;
+    width: auto;
+  }
+  .home-break-detail-info { right: var(--edge); bottom: 96px; }
+  .home-break-detail-page { max-height: 52vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-break-detail { transition: opacity .3s ease; clip-path: none; }
+}

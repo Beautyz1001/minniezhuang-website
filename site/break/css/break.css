@@ -1,0 +1,597 @@
+/* ===== BREAK ===== */
+/* 2026-09-14 全量重做：结构、交互手感、详情弹层逻辑照搬 site/works/css/works.css，
+   左右方向整体镜像——Works 是卡片在左、3D+标题在右；Break 改成卡片在右、
+   3D+标题在左。详情弹层里 Works 图带贴左/文字贴左，Break 改成图带贴右/文字贴左
+   （用户 2026-09-14 明确要求："图带在右边，文字在左边"）。
+   这个文件只服务 site/break/，不引用、不修改 site/works、site/home 的任何 css。
+   旧版（banner 擦出式详情、底部横排索引条、瞎做的两栏网格）已整体废弃，
+   不再和这版混用。 */
+
+:root {
+  --red: #e00000;
+  --paper: #f2efec;
+  --white: #f2efec;
+  --muted: rgba(242, 239, 236, .58);
+  --text-2: rgba(242, 239, 236, .62);
+  --quiet: rgba(242, 239, 236, .26);
+  --text-3: rgba(242, 239, 236, .32);
+  --black: #050606;
+  --edge: clamp(20px, 3.96vw, 64px);
+  --t-label: 12px;
+  --ls-label: .045em;
+  --ease: cubic-bezier(.76, 0, .24, 1);
+  --model-rgb: 166, 211, 216;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  background: var(--black);
+  color: var(--paper);
+  font-family: 'Jaldi', sans-serif;
+  overflow: hidden;
+}
+
+button,
+a { font: inherit; }
+
+button { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- shared navigation (照搬 works.css，仅文案不同) ---------- */
+
+.site-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 27px var(--edge);
+  pointer-events: none;
+}
+
+.nav-logo {
+  color: var(--red);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: .2px;
+}
+
+.nav-menu {
+  --nav-open: 0;
+  position: relative;
+  margin-top: 8.5px;
+  text-align: right;
+  pointer-events: auto;
+}
+
+.nav-current {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.nav-links {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .13em;
+  padding: .13em 0 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.nav-slot { overflow: hidden; padding-left: 10px; margin-left: -10px; }
+
+.nav-slot .nav-link {
+  display: block;
+  transform: translateY(calc((1 - var(--nav-open)) * 100%));
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1), opacity .42s cubic-bezier(.16, 1, .3, 1);
+}
+
+.nav-menu:hover,
+.nav-menu.is-open,
+.nav-menu:focus-within { --nav-open: 1; }
+
+.nav-menu:hover .nav-links,
+.nav-menu.is-open .nav-links,
+.nav-menu:focus-within .nav-links { pointer-events: auto; }
+
+.nav-link {
+  position: relative;
+  display: inline-block;
+  color: #d8d5d6;
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+  text-decoration: none;
+  opacity: .62;
+  transition: opacity .3s ease;
+}
+
+.nav-link::after {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  content: '';
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+.nav-link.active { color: var(--red); opacity: 1; }
+.nav-link.active::after,
+.nav-link:hover::after,
+.nav-link:focus-visible::after { transform: scaleY(1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-menu:hover .nav-link { opacity: .3; }
+  .nav-menu:hover .nav-link:hover,
+  .nav-menu .nav-link:focus-visible { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link, .nav-link::after, .nav-slot .nav-link { transition: none; }
+}
+
+/* ---------- two-part break home ----------
+   镜像自 works.css 的「two-part works home」：3D 模型 + 标题贴在左边
+   （Works 是画廊贴左、电视贴右），卡片画廊贴在右边。 */
+
+.break-stage { position: fixed; inset: 0; overflow: hidden; }
+
+/* Break 的路由遮幕从下向上离开；与 Works 的横向揭幕维持同一语言但不同方向。 */
+.break-route-veil { display: none; }
+
+html.break-route-armed .break-route-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+  background: var(--black);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.break-model-pane {
+  position: absolute;
+  inset: 0 max(34vw, 420px) 0 0;
+  z-index: 1;
+  overflow: hidden;
+  /* 纯黑，不要 Works 那种带色温的径向渐变——这里要读成一个空间，
+     不是一块被光染过色的屏幕。 */
+  background: #000;
+}
+
+.break-model-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.break-model-status {
+  display: none;
+  position: absolute;
+  left: var(--edge);
+  bottom: 34px;
+  z-index: 2;
+  color: var(--text-3);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 10px;
+  letter-spacing: .06em;
+  pointer-events: none;
+}
+
+.break-model-status.is-error { color: var(--red); }
+
+.break-model-copy {
+  position: absolute;
+  left: var(--edge);
+  top: 50%;
+  z-index: 2;
+  width: min(310px, 32vw);
+  text-align: left;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.break-model-name {
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin-top: 18px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(36px, 4vw, 54px);
+  font-weight: 400;
+  line-height: .84;
+  letter-spacing: .04em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.break-model-name-inner {
+  display: inline-block;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.break-model-name::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 1px;
+  height: 100%;
+  background: var(--red);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .break-model-name:hover::after {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .break-model-name::after {
+    transition: none;
+  }
+}
+
+.break-model-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px;
+  width: min(420px, 43vw);
+  list-style: none;
+}
+
+.break-model-tags li {
+  border: 1px solid rgba(242, 239, 236, .16);
+  background: rgba(8, 5, 11, .18);
+  padding: 4px 7px 3px;
+  color: rgba(242, 239, 236, .46);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+.break-model-credit {
+  margin-top: 20px;
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* 2026-09-15：用户要求把 Global Game Jam 那两个项目的 "Global Game Jam"
+   部分改成白色，只标了 highlightCompany 的项目生效，见 break.js。 */
+.break-model-credit .credit-company { color: var(--paper); }
+
+.break-gallery-pane {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: min(40vw, 650px);
+  min-width: 440px;
+  /* 去掉之前那层带蓝灰色温的径向渐变——和左边模型区一样，只留纯黑的
+     线性渐变把卡片边缘往画面里soften，不带任何颜色。 */
+  background: linear-gradient(270deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, .97) 72%, rgba(0, 0, 0, 0) 100%);
+}
+
+.break-gallery {
+  position: absolute;
+  --channel-collapsed-width: clamp(160px, 12vw, 212px);
+  --channel-expanded-width: clamp(340px, 25vw, 462px);
+  --channel-height: clamp(112px, 14vh, 166px);
+  --channel-gap: clamp(18px, 1.8vh, 40px);
+  --channel-transition: 1.45s;
+  --channel-ease: cubic-bezier(.22, 1, .36, 1);
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  cursor: grab;
+  user-select: none;
+  outline: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+}
+
+/* 2026-09-15：不再用一个 translateY 统一挪动整条 flex 队列——每张卡自己
+   按"离当前弹簧值最短的环形距离"算 transform（见 break.js 的
+   renderCards），track 本身只是给这些绝对定位的卡当容器。 */
+.break-gallery-track {
+  position: absolute;
+  inset: 0;
+}
+
+.break-gallery-card {
+  position: absolute;
+  top: 0;
+  right: clamp(160px, 13vw, 230px);
+  width: var(--channel-collapsed-width);
+  height: var(--channel-height);
+  overflow: hidden;
+  background: #090a0a;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  will-change: width, transform;
+  transition: width var(--channel-transition) var(--channel-ease), opacity .3s var(--ease);
+}
+
+.break-gallery-card::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(270deg, rgba(5, 6, 6, .48), rgba(5, 6, 6, .08) 65%, rgba(5, 6, 6, .32));
+  content: '';
+  opacity: .42;
+  pointer-events: none;
+  transition: opacity var(--channel-transition) var(--channel-ease);
+}
+
+.break-gallery-card.is-expanded { width: var(--channel-expanded-width); }
+.break-gallery-card.is-expanded::after { opacity: .18; }
+
+.break-gallery-card:disabled { opacity: 1; }
+
+.break-gallery-card-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(.92) brightness(.48);
+  transform: scale(1.04);
+  transition: filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
+}
+
+.break-gallery-card.is-active .break-gallery-card-image {
+  filter: saturate(1) brightness(.78);
+  transform: scale(1);
+}
+
+.break-gallery-index {
+  position: absolute;
+  top: 23.72%;
+  bottom: 23.72%;
+  right: var(--edge);
+  z-index: 4;
+  width: 72px;
+  color: rgba(242, 239, 236, .46);
+  font-size: 13px;
+  letter-spacing: .08em;
+  pointer-events: none;
+  text-align: right;
+}
+
+.break-gallery-index-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom,
+    transparent,
+    rgba(242, 239, 236, .15) 18%,
+    rgba(242, 239, 236, .15) 82%,
+    transparent);
+}
+
+.break-gallery-index-line i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  background: rgba(242, 239, 236, .86);
+  content: '';
+  transition: top var(--channel-transition) var(--channel-ease), height var(--channel-transition) var(--channel-ease);
+}
+
+.break-gallery-index-current {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  color: var(--paper);
+  transform: translateY(-50%);
+  transition: top var(--channel-transition) var(--channel-ease);
+}
+
+/* ---------- project detail reader ----------
+   照搬 works.css：同样不放进 .break-stage（fixed 会自建层叠上下文），
+   z-index 60 和 .site-nav 的 50 直接做兄弟比较。
+   2026-09-15 改定：图带不再是横向、贴右滚动，改成**竖直滚动、贴右侧
+   固定一列**——和总览页那条竖排画廊同一个方向、同一侧，从点卡片进详情
+   视觉上是"同一条竖轴变大了"。默认露出约 1.5 张（第二张顶部被截一截，
+   暗示还能往下滚）。文字仍贴左，不受影响。 */
+
+.break-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  visibility: hidden;
+  background: rgba(5, 6, 6, .98);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.break-detail.is-visible { visibility: visible; opacity: 1; pointer-events: auto; }
+
+.break-detail-stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.break-detail-pages {
+  position: absolute;
+  pointer-events: auto;
+  /* 2026-09-15 第三次改：之前用固定百分比卡左边界，图片一旦比这个框宽
+     就被 overflow-x:hidden 切掉右边——用户明确要求"图片必须完整显示，
+     不能裁"，所以不能再用固定宽度的框。改成不设 left、只钉 right:5px、
+     width:auto：容器会按"最宽那张图的实际宽度"收缩包裹（shrink-to-fit），
+     每张图都按自己原始比例完整显示，永远不会被容器自己的边裁掉。
+     max-width 只是防止极端宽图把框撑到盖住左边文字的安全上限。 */
+  right: 5px;
+  top: 0;
+  bottom: 96px;
+  width: auto;
+  max-width: min(90vw, 1100px);
+  /* 图片离顶部的距离对齐 Works：那边是 inset top:0 + 72vh 高的带子里
+     图片自己 88% 高、上下各留 6%，换算下来图片顶边离视口顶部
+     = 6% × 72vh ≈ 4.32vh，这里直接照抄这个数，不是随手挑的。 */
+  padding-top: 4.32vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 20px;
+  overflow-y: auto;
+  overflow-x: visible;
+  cursor: grab;
+  scroll-behavior: auto;
+}
+
+.break-detail-pages.is-dragging { cursor: grabbing; scroll-behavior: auto; }
+.break-detail-pages::-webkit-scrollbar { display: none; }
+
+/* 图片尺寸和 Works 一样大：那边是 72vh 的带子里图片占 88% 高，
+   换算成固定视口高度就是 0.72 × 0.88 = 63.36vh，直接照抄这个数。
+   宽度用 auto（原始比例），不强制拉伸/裁切——这样右边缘能贴死边框，
+   同时整张图都完整可见，不会像 object-fit:cover 那样把两侧裁掉。
+   2026-09-15 修复：height 原来是写死的固定值，遇到特别宽的图（按这个
+   高度换算出的宽度会超过 .break-detail-pages 的 max-width）就会比容器宽，
+   而容器 overflow-y:auto 会把另一轴的 overflow-x:visible 强制变成 auto
+   （CSS 规范规定的行为，不是 bug），超出容器左边界的那截因此被当成
+   "还没滚到的溢出内容"直接裁掉——图片左边缘（含标题文字）被吃掉一块。
+   改成 height/width 都用 auto、改用 max-height/max-width 卡上限：
+   浏览器会整体等比缩小去同时满足两个上限，图片宽度因此永远不会超过
+   容器，也就永远不会触发那个裁切——代价是特别宽的图会比其他图矮一点，
+   但保证"完整显示，不能裁"。 */
+.break-detail-page {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  max-height: 63.36vh;
+  max-width: 100%;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.break-detail-info { position: absolute; bottom: 120px; left: var(--edge); max-width: 46ch; }
+.break-detail-name { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: .03em; }
+/* 2026-09-15：说明文字改成固定列宽自动换行，不再靠手动 \n 分行——
+   宽度取自第一个项目（ALONE IN KYOTO）第一行"以…场景"实测的渲染宽度
+   （324px），保证所有项目的每一行（不只是第一行）宽度都一致。
+   white-space 从 pre 改成 pre-wrap：保留手填的换行符（段落分段用），
+   同时让超出这个宽度的文字自动换行，不再要求逐条手动找断点。 */
+.break-detail-desc { margin-top: 10px; width: 324px; color: var(--muted); font-size: 12px; line-height: 1.5; font-family: 'DengXian', '等线', 'Jaldi', sans-serif; white-space: pre-wrap; text-align: justify; }
+.break-detail-desc:empty { display: none; }
+
+.break-detail-links { position: absolute; left: var(--edge); bottom: 45px; display: flex; gap: 24px; pointer-events: auto; }
+
+.break-detail-link {
+  position: relative;
+  color: var(--muted);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-decoration: none;
+  transition: color .3s ease;
+}
+
+.break-detail-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .4s cubic-bezier(.16, 1, .3, 1);
+}
+
+.break-detail-link:hover { color: var(--paper); }
+.break-detail-link:hover::after { transform: scaleX(1); }
+
+.break-close {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--quiet);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--paper);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.break-close:hover { border-color: var(--paper); }
+
+.break-detail-nav { position: absolute; right: var(--edge); bottom: 45px; display: flex; gap: 20px; }
+.break-nav-btn {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: color .3s ease, transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+.break-nav-btn:hover { color: var(--paper); transform: scale(1.08); }
+
+.break-nav-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+#breakNavPrev::after { left: -8px; }
+#breakNavNext::after { right: -8px; }
+.break-nav-btn:hover::after { transform: scaleY(1); }
+
+:focus-visible { outline: 1px solid var(--paper); outline-offset: 5px; }
+
+@media (max-width: 900px) {
+  html, body { overflow: auto; }
+  .break-stage { position: relative; min-height: 100dvh; overflow: visible; }
+  .break-gallery-pane { position: relative; width: 100%; min-width: 0; min-height: 100dvh; background: var(--black); }
+  .break-gallery { inset: 106px var(--edge) 38px; }
+  .break-gallery-index { right: 0; }
+  .break-gallery-card { min-height: 0; }
+  .break-model-pane { position: relative; inset: auto; height: 75dvh; }
+  .break-model-copy { left: var(--edge); top: 50%; width: min(300px, 72vw); }
+  .break-detail { position: fixed; }
+  .break-detail-pages { height: 66%; padding: 0 var(--edge); }
+  .break-detail-page { height: 76%; }
+  .break-detail-info { left: var(--edge); bottom: 104px; }
+  .break-detail-nav { right: var(--edge); bottom: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
+}

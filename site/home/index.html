@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOMEPAGE PORTAL — Minnie Zhuang</title>
+
+<!-- 三款字体：均为 Google Fonts 现成字体，无需替代
+     Special Gothic Expanded One = 左上角 logo
+     Jaldi                       = 导航 + 左下角小字（原来是 Spartan，已统一）
+     Bebas Neue                  = 大标题
+     Spartan 已全部由 Jaldi 取代，所以不再下载 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Gothic+Expanded+One&family=Jaldi:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<!-- 2026-09-15 测试用：General Sans（Fontshare，免费商用），只给首屏 slogan 试字体，
+     没有铺开到全站。参考站 noth.in 的正文字体是收费的 PP Neue Montreal，用这个做平替。 -->
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/homepage-portal.css">
+
+<!-- 入场动画的起始状态。必须在这里、必须是内联的：晚一步浏览器就会先画一帧
+     完整画面，开场变成"闪一下再变黑"。带 4 秒保险，万一 JS 没跑起来，
+     黑幕自己撤，页面不会被永远盖住。细节见 js/homepage-portal-intro.js。 -->
+<script>
+  document.documentElement.classList.add('intro-armed');
+  setTimeout(function () {
+    document.documentElement.classList.remove('intro-armed');
+  }, 4000);
+</script>
+</head>
+<body>
+
+  <!-- 开场的黑场。动画放完由 JS 从 DOM 里移除。 -->
+  <div class="intro-veil" aria-hidden="true"></div>
+
+  <!-- 加载动效。整幕只有这一条，摆在门洞将要出现的那个位置上：
+       走满之后先收成一个点，再开成门洞的形状，交给入场动画。
+       尺寸由 JS 按门洞的真实位置算，这里不写死任何数字。 -->
+  <div class="intro-loader" aria-hidden="true">
+    <div class="loader-glow"></div>
+    <div class="loader-bar"></div>
+  </div>
+
+  <!-- 顶部导航 -->
+  <nav class="site-nav">
+    <div class="nav-logo">THE ART<br>OF MZ</div>
+    <!-- 收起式菜单（2026-09-09）。形式照参考站 noth.in 的 MENU，逻辑按本站自己的：
+         **收起时只露出当前页那一项**，鼠标移上来其余三项依次滑出。
+
+         结构分两块，不能合并：
+         · .nav-current 是常驻的那一行，占位置，决定导航这一行的高度。
+           它**不是链接**——人已经在这一页了；在触屏上它就是"点一下展开"的按钮，
+           所以用 button，键盘也能 Tab 到它。
+         · .nav-links 是浮在它下面的一列，**绝对定位、不占布局**，
+           所以展开收起时页面上其他东西一个像素都不动。
+         每个 li 是一个**遮挡框**，里面的词初始被推到框底下、被裁掉看不见。
+
+         ⚠ 换页时要把 .nav-current 换成那一页的名字，并把它从下面这一列里去掉——
+         常驻的那一项和列表里的三项**不能重复**。 -->
+    <div class="nav-menu">
+      <button type="button" class="nav-link nav-current active" aria-expanded="false" aria-controls="nav-links">HOME</button>
+      <ul class="nav-links" id="nav-links">
+        <li class="nav-slot"><a href="../works/works.html" class="nav-link">WORKS</a></li>
+        <li class="nav-slot"><a href="../break/break.html" class="nav-link">BREAK</a></li>
+        <li class="nav-slot"><a href="#contact" class="nav-link">ABOUT</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Works 项目详情弹窗（Home 专用）。结构/视觉照抄 site/works/works.html 的
+       .works-detail，class 加 home- 前缀避免撞名；数据和图片直接引用
+       site/works/ 下的同一份文件（js/homepage-works-detail.js 里读
+       window.WORKS_DATA），内容只有一份，不复制。只服务 Works 轮播这四张
+       精选卡片；关闭后留在 Home，不跳转页面。
+       放在这里（.site-nav 的兄弟节点、顶层），不嵌进任何带 transform 的
+       祖先——否则 position:fixed 会被限制在那个祖先内部（同样的坑见
+       works.html 里对 .works-detail 位置的注释）。 -->
+  <div class="home-works-detail" id="homeWorksDetail" aria-hidden="true">
+    <div class="home-works-detail-stage" id="homeWorksDetailStage">
+      <div class="home-works-detail-pages" id="homeDetailPages"></div>
+      <div class="home-works-detail-info">
+        <div class="home-works-detail-name-zh" id="homeDetailNameZh"></div>
+        <p class="home-works-detail-desc" id="homeDetailDesc"></p>
+      </div>
+      <div class="home-works-detail-links" id="homeDetailLinks"></div>
+    </div>
+    <button class="home-works-close" id="homeWorksClose" aria-label="关闭项目详情" type="button">×</button>
+    <div class="home-works-detail-nav">
+      <button class="home-works-nav-btn" id="homeNavPrev" type="button">PREV</button>
+      <button class="home-works-nav-btn" id="homeNavNext" type="button">NEXT</button>
+    </div>
+  </div>
+
+  <!-- BREAK / ALONE IN KYOTO 详情弹层：数据与四张正式详情图直接读
+       site/break/js/break-data.js，避免 Home 和 Break 各维护一份项目内容。 -->
+  <section class="home-break-detail" id="homeKyotoDetail" aria-label="ALONE IN KYOTO 项目详情" aria-hidden="true">
+    <div class="home-break-detail-stage" id="homeKyotoDetailStage">
+      <div class="home-break-detail-pages" id="homeKyotoDetailPages"></div>
+      <div class="home-break-detail-info">
+        <div class="home-break-detail-name" id="homeKyotoDetailName"></div>
+        <p class="home-break-detail-desc" id="homeKyotoDetailDesc"></p>
+      </div>
+    </div>
+    <button class="home-break-close" id="homeKyotoDetailClose" type="button" aria-label="关闭 ALONE IN KYOTO 项目详情">×</button>
+  </section>
+
+  <!-- GAME DEMOS 的详情阅读器：与 Kyoto 一样只读取 Break 的正式数据，不在 Home 复制项目内容。 -->
+  <section class="home-break-detail" id="homeGameDemoDetail" aria-label="游戏 Demo 项目详情" aria-hidden="true">
+    <div class="home-break-detail-stage" id="homeGameDemoDetailStage">
+      <div class="home-break-detail-pages" id="homeGameDemoDetailPages"></div>
+      <div class="home-break-detail-info">
+        <div class="home-break-detail-name" id="homeGameDemoDetailName"></div>
+        <p class="home-break-detail-desc" id="homeGameDemoDetailDesc"></p>
+      </div>
+    </div>
+    <button class="home-break-close" id="homeGameDemoDetailClose" type="button" aria-label="关闭游戏 Demo 项目详情">×</button>
+  </section>
+
+  <section class="home-break-detail" id="homeJasonDetail" aria-label="JASON WAS BORN 项目详情" aria-hidden="true">
+    <div class="home-break-detail-stage" id="homeJasonDetailStage">
+      <div class="home-break-detail-pages" id="homeJasonDetailPages"></div>
+      <div class="home-break-detail-info">
+        <div class="home-break-detail-name" id="homeJasonDetailName"></div>
+        <p class="home-break-detail-desc" id="homeJasonDetailDesc"></p>
+      </div>
+    </div>
+    <button class="home-break-close" id="homeJasonDetailClose" type="button" aria-label="关闭 JASON WAS BORN 项目详情">×</button>
+  </section>
+
+  <section class="home-break-detail" id="homeInstallDetail" aria-label="THE NEW IDENTITY CARD 项目详情" aria-hidden="true">
+    <div class="home-break-detail-stage" id="homeInstallDetailStage">
+      <div class="home-break-detail-pages" id="homeInstallDetailPages"></div>
+      <div class="home-break-detail-info">
+        <div class="home-break-detail-name" id="homeInstallDetailName"></div>
+        <p class="home-break-detail-desc" id="homeInstallDetailDesc"></p>
+      </div>
+    </div>
+    <button class="home-break-close" id="homeInstallDetailClose" type="button" aria-label="关闭 THE NEW IDENTITY CARD 项目详情">×</button>
+  </section>
+
+  <section class="pin-wrap">
+    <div class="hero" id="hero">
+
+      <!-- 背景：黑-紫-黑 三段，紫色带缓慢呼吸 -->
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="bg-purple" aria-hidden="true"></div>
+
+      <!-- 地面光池：只有一层，物理上光源只会投出一个光斑 -->
+      <div class="light-pool" aria-hidden="true"></div>
+
+      <!-- 远场光晕：真实的灯光离开门口后按距离衰减——近处掉得快、远处拖得很长，
+           所以这里用一条多段渐变模拟这条衰减曲线，而不是一个均匀的圆 -->
+      <div class="door-glow" aria-hidden="true"></div>
+
+      <!-- 门：通往里面那个空间的通道口。
+           Phase 3.1 起，这里分成了两个「深度层」：
+             .door          —— 门洞本身，就在镜头前方那个平面上（clip-path 开洞，与 Phase 2 完全一致）
+             .door-interior —— 门内的世界，被推到门洞**后面**一段距离
+           所以门不再是一张贴在屏幕上的图，而是一个开在空间里的洞，洞后面还有空间。 -->
+      <!-- 3D 门洞（Three.js）。加载成功后 .hero 会拿到 .portal-3d，
+           下面那个 CSS 版的 .door 就自动隐藏；加载失败则原样保留 CSS 版。 -->
+      <canvas id="portal-canvas" aria-hidden="true"></canvas>
+
+      <div class="door" aria-hidden="true">
+        <div class="door-interior">
+          <!-- 两张同样的图叠着：一张清晰、一张固定模糊，靠交叉淡入做"对焦"，避免每帧重算 blur -->
+          <img src="assets/homepage/background-clean.png" alt="" class="door-world door-world-soft">
+          <img src="assets/homepage/background-clean.png" alt="" class="door-world door-world-sharp">
+        </div>
+      </div>
+
+      <!-- 体积雾 -->
+      <div class="fog" aria-hidden="true"></div>
+
+      <!-- 暗角：收拢视线，强化纵深 -->
+      <div class="vignette" aria-hidden="true"></div>
+
+      <!-- 前景文字图层（永远清晰，与虚焦的背景拉开景深） -->
+      <div class="hero-text">
+        <p class="eyebrow">A CREATIVE DEVELOPER</p>
+        <!-- 两个词之间是一个真正的空格，整行当成一个字符串排版；
+             字号由 JS 量出来，让 M 的左边和 G 的右边正好顶到左右边距 -->
+        <h1 class="title-row"><span class="word word-left">MINNIE</span> <span class="word word-right">ZHUANG</span></h1>
+      </div>
+
+    </div>
+
+    <!-- 门洞完成后，原 Hero 继续留在后方；这组前景只靠页面本身向上滚动。 -->
+    <section class="home-showreel" aria-labelledby="showreel-title">
+      <!-- 2026-09-15：用户要求恢复碎裂效果，但改成左右各一句（不是原来那种
+           "一坨里堆四行"的写法，PITFALLS 否掉的是"两坨内容重复、位置错开"，
+           这次是内容不同、左右对称各一行，用户已确认要这样做）。
+           和 slogan 一起进场，接着滚动会逐字碎裂——机制原样复用
+           `setupShowreelShards()`（js/homepage-portal-scroll.js），
+           没有改一行 JS，靠 querySelectorAll('.showreel-shard') 自动识别。 -->
+      <div class="showreel-shards" aria-hidden="true">
+        <p class="showreel-shard showreel-shard-left">
+          <span class="showreel-shard-line">WHAT DO I DO //¿</span>
+        </p>
+        <p class="showreel-shard showreel-shard-right">
+          <span class="showreel-shard-line">WHO AM I ?×///¿#</span>
+        </p>
+      </div>
+      <div class="showreel-copy">
+        <!-- ⚠ `<br>` 是用户 2026-09-09 指定的固定断点（从 WITH 起另起一行），
+             不是让它自己折的。改文案时这个断点要一起看。
+             三个红词也是用户点名的：PRODUCT / VISUAL / PLAY。 -->
+        <h2 id="showreel-title" class="showreel-slogan">I craft intelligent experiences with<br><span class="slogan-accent">Product</span> rigor, <span class="slogan-accent">visual</span> instinct, and fluency in <span class="slogan-accent">play</span>.</h2>
+      </div>
+      <div class="showreel-video-stage">
+        <div class="showreel-video-pin">
+          <div class="showreel-scroll-track">
+            <!-- 2026-09-08：静帧 portal-study.png 换成 视频1.mp4（用户指定）。
+                 缩小动画、几何、finalX/finalY 一行没改，只换了媒体本身。
+
+                 ⚠ `poster` 留着原来那张静帧：视频 54 MB，加载完之前这一格不能是黑的，
+                   否则整个缩小动画会从一块黑洞开始。
+                 ⚠ `preload="none"`：这一格在页面最顶上、门洞刚走完就露出来，
+                   写 preload="auto" 或 autoplay 等于一进站就抢 54 MB 带宽，
+                   首屏的 Three.js 和 Works 那五张图会跟着变慢。
+                   改成由 setupShowreelVideo() 里的开关：进视口才 play()，离开就 pause()。
+                 ⚠ 视频尺寸必须在 CSS 里单独写（.showreel-media video）。
+                   这一格的 <img> 一直是按固有尺寸显示、靠容器裁切的，
+                   2560×1440 的视频照这个走会把整格撑爆。 -->
+            <figure class="showreel-media">
+              <video src="assets/homepage/scroll/视频1.mp4"
+                     poster="assets/homepage/scroll/占位/portal-study.png"
+                     muted loop playsinline preload="none"
+                     aria-label="红光穿过深色空间的抽象影像"></video>
+            </figure>
+          </div>
+          <div class="showreel-note">
+            <p>( Step inside )</p>
+            <p>Images hold a moment. Ideas change the way a moment is seen.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- 门洞走到底后，页面不跳转。这里从参考首页的 showreel 开始，
+       完整保留它从首页宣言、作品目录、影像、Studio、团队、glitch 到 Footer 的节奏。 -->
+  <main class="inner-world" id="inner-world">
+    <section class="home-works" id="work" aria-labelledby="works-title">
+      <div class="works-sticky-word" aria-hidden="true">
+        <span>W</span><span>O</span><span>R</span><span>K</span><span>S</span>
+      </div>
+      <header class="works-intro">
+        <p class="works-index">Work</p>
+        <h2 id="works-title" class="works-slogan">
+          <span class="line">Selected work across intelligent</span>
+          <span class="line">systems, interaction, and play.</span>
+        </h2>
+      </header>
+      <!-- 2026-09-15 重做：首页 Works 从「四条横向图带长滚动」改成「三张精选卡片轮播」。
+           旧的 .work-item 结构（含 BUBBLE DELIVERY / YOUDAO DICTIONARY）整体删除，
+           完整内容仍在 Works 独立页，这里只做三个精选入口。
+           文字模板保持原来的四行顺序：标签 → 项目名 → 公司·角色 → 一句话简介，
+           数据来自同一批项目，只是渲染方式换成"中间大图 + 两侧缩小模糊"的卡片轮播，
+           左侧文字栏随右侧当前居中的卡片同步切换。见 css 里的 .works-carousel
+           和 js/homepage-portal-carousel.js。 -->
+      <div class="works-carousel" id="worksCarousel">
+        <div class="works-carousel-info">
+          <ul class="wc-tags" id="wcTags" aria-label="项目标签"></ul>
+          <h3 class="wc-title" id="wcTitle"></h3>
+          <p class="wc-credit" id="wcCredit"></p>
+          <p class="wc-summary" id="wcSummary"></p>
+        </div>
+        <div class="works-carousel-track" id="wcTrack" tabindex="0" role="listbox" aria-label="精选项目轮播">
+          <button class="wc-card" type="button" role="option" data-index="0" data-project="paradox-heaven" aria-label="查看 PARADOX HEAVEN 项目详情">
+            <img src="assets/homepage/scroll/works/1paradox.png" decoding="async" alt="PARADOX HEAVEN 的手机交互与紫色梦境场景作品图">
+          </button>
+          <button class="wc-card" type="button" role="option" data-index="1" data-project="nba2k-online" aria-label="查看 NBA2K ONLINE 项目详情">
+            <img src="assets/homepage/scroll/works/2腾讯.png" decoding="async" alt="NBA2K ONLINE 的游戏界面作品图">
+          </button>
+          <button class="wc-card" type="button" role="option" data-index="2" data-project="fantasy-westward-journey" aria-label="查看 FANTASY WESTWARD JOURNEY 项目详情">
+            <img src="assets/homepage/scroll/works/3网易互娱.png" decoding="async" alt="《梦幻西游》的游戏界面与原画拼版">
+          </button>
+          <button class="wc-card" type="button" role="option" data-index="3" data-project="shanghai-1924" aria-label="查看 SHANGHAI1924 项目详情">
+            <img src="assets/homepage/scroll/works/4 VR.png" decoding="async" alt="SHANGHAI1924 项目封面">
+          </button>
+        </div>
+      </div>
+      <!-- 「View all」按参考站 noth.in 的同名链接 1:1 复刻（2026-09-09 实测）。
+           箭头的 viewBox、两条折线的坐标、线宽 1.5 全部照抄原件，
+           改任何一个数就不是那个箭头了。hover 动效写在 CSS 里（只有箭头拉长）。 -->
+      <div class="works-outro"><a class="view-all" href="../works/works.html"><span class="view-all-label">View all</span><svg class="view-all-arrow" viewBox="-8 -1 26 14" width="23" height="12" aria-hidden="true" focusable="false"><polyline points="-6,7.5 15.5,7.5"/><polyline points="12,4 15.5,7.5 12,11"/></svg></a><p>( N5 )</p></div>
+    </section>
+
+    <!-- BREAK 开篇（2026-09-07 挪到这里）。位置：Works 的 VIEW MORE 之后、电影院段之前。
+
+         这是 BREAK 这一部分的**章节开场**。电影院段（ALONE IN KYOTO）是 BREAK 的
+         第一件作品，所以章节名必须排在它前面。此前这块在 .home-studio 里、排在电影院
+         之后，等于章节名迟到了一屏——那是错的，别再挪回去。
+
+         归属判定见 AGENTS.md：Works = 接的活（腾讯 / 网易 / AI / BUBBLE DELIVERY），
+         其余（自己的游戏 demo、场景设计、VR 项目）都是 BREAK。
+
+         这里只保留标签 + 两行字。原来同一块里的两张图已拆到电影院之后
+         （.home-break-gallery），因为图属于 BREAK 的内容，不属于章节开场。
+
+         每行都包在 .line 里：JS 往里再套一层，靠遮罩把整行从下方推上来。
+         断行写死在这里，不靠容器自动折行。
+         ⚠ 换文案时每行渲染宽度不能超过右栏的 64.5%（1536 视口下约 515px）：
+            超了会折成两行，那一行就变成"两行一起推上来"，和逐行错开的节奏对不上。 -->
+    <section class="home-break-open" aria-label="BREAK">
+      <div class="break-intro">
+        <!-- 2026-09-09：先复用 WORKS 的五字母结构与字体，滚动区间由用户后续指定后再接入。 -->
+        <div class="break-sticky-word" aria-hidden="true">
+          <span>B</span><span>R</span><span>E</span><span>A</span><span>K</span>
+        </div>
+        <div class="break-lead">
+          <p>
+            <span class="line">A space for experiments, obsessions,</span>
+            <span class="line">and the instincts behind the work.</span>
+          </p>
+        </div>
+      </div>
+    </section>
+    <!-- BREAK 的第一个项目：ALONE IN KYOTO 先整屏铺满，往下滚动一屏，镜头往后拉，
+         画面收回电影院银幕里。接在 Works 的 VIEW MORE 之后，
+         从这里开始就不再是 Works 的内容了。
+
+         关键在于**银幕和画面锁在同一个变换上**：画面是电影院素材里那块银幕的
+         精确矩形（位置由 JS 按素材实测比例算出），整组只被一个 scale + translate
+         推远，所以每一帧画面都正好落在银幕里，几何上没有"对不齐"这种可能。
+         别改成给画面和电影院各写一条动画——那两条曲线一旦不同步，
+         中途画面就会溢出银幕边框。
+
+         这一段替换掉了原来占在这个位置的 `.home-studio-video`（fold-study.png
+         影像占位段，sticky + 两级缩放）。它的 CSS 和 JS 都还留着，
+         需要时把那段 HTML 放回来即可恢复。 -->
+    <section class="home-cinema" aria-label="ALONE IN KYOTO">
+      <div class="cinema-stage">
+        <div class="cinema-camera">
+          <img class="cinema-hall" src="assets/homepage/scroll/break/5cinema.jpg" alt="" aria-hidden="true" decoding="async">
+          <!-- 2026-09-08：银幕里的静帧换成视频。`5.jpg` 留作 poster——
+               视频有 24 MB，加载完之前银幕不能是黑的，否则推远动画会从一块黑洞开始。
+               不写 autoplay：这一段在页面很靠下的位置，一进页面就开播等于白下载 24 MB。
+               播放由 setupCinema() 按段落是否在视口里控制。 -->
+          <figure class="cinema-screen">
+            <video src="assets/homepage/scroll/视频2.mp4"
+                   poster="assets/homepage/scroll/break/5.jpg"
+                   muted loop playsinline preload="metadata"
+                   aria-label="ALONE IN KYOTO：霓虹招牌构成的夜间街景"></video>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- BREAK 里的一个项目：项目介绍 + 两张图（2026-09-07）。
+         位置：电影院段之后、VR 项目之前。
+
+         仍然套在 .break-intro 这个网格里，所以 .break-shot / .break-wide 的比例、
+         左栏缩进、小图下沉全部和拆分之前一模一样，那部分 CSS 一行没改。
+
+         ⚠ 介绍文字必须留在这里、和图同属一个 .break-intro，不能拆出去单独放。
+         参考站的构图就是这个关系：文字行在上，图片行的顶边比文字行顶边低 132px，
+         而小图那个 47% 的左缩进是**相对文字栏**量出来的。文字一旦被拿走，
+         小图的缩进就失去参照、看起来像凭空浮着——2026-09-07 拆分时踩过一次。
+
+         ⚠ 占位文案。`( ALONE IN KYOTO )` 是我按"这两张图紧接在电影院段之后"推的，
+         如果这两张图其实属于另一个项目，改这一行即可。
+         右边两行同样是占位，每行渲染宽度不能超过右栏 64.5%（1536 视口下约 515px）。 -->
+    <section class="home-break-gallery" aria-labelledby="kyoto-title">
+      <div class="break-intro">
+        <div class="break-project-info">
+          <div class="break-project-copy">
+            <!-- 与 Break 总览页同一项目共用标签 / 标题 / 角色数据（break-data.js）。 -->
+            <ul class="work-tags" aria-label="项目标签">
+              <li>GAME ENVIRONMENT</li>
+              <li>3D</li>
+              <li>NARRATIVE DESIGN</li>
+              <li>UNREAL ENGINE</li>
+            </ul>
+            <button id="kyoto-title" class="break-title-interactive" type="button" aria-label="查看 ALONE IN KYOTO 项目详情"><span class="break-title-inner">ALONE IN KYOTO</span></button>
+            <p class="break-project-credit">Course Project · 3D Artist</p>
+            <!-- 2026-09-09 大小写归并：17px 正文档一律句首大写混排，和 Works
+                 的项目简介（Interaction design across… / AI-native mobile RPG…）对齐。 -->
+            <p class="break-project-summary">A self-directed world-building study in atmosphere and spatial narrative.</p>
+          </div>
+        </div>
+        <div class="break-shot">
+          <div class="break-robot-stage" role="img" aria-label="向左的白色机器人和两段手绘对白">
+            <img class="break-robot-speech break-robot-speech-primary" src="assets/homepage/scroll/break/5.2.png" decoding="async" alt="">
+            <img class="break-robot-speech break-robot-speech-secondary" src="assets/homepage/scroll/break/5.3.png" decoding="async" alt="">
+            <img class="break-robot" src="assets/homepage/scroll/break/5.1.png" decoding="async" alt="">
+          </div>
+        </div>
+        <button class="break-wide break-wide--interactive" id="kyotoDetailTrigger" type="button" aria-label="查看 ALONE IN KYOTO 项目详情">
+          <img src="assets/homepage/scroll/break/5模型.jpg" decoding="async" alt="ALONE IN KYOTO 项目图">
+        </button>
+      </div>
+    </section>
+
+    <!-- VR 项目首屏（2026-09-07）。参考 distil.im 的项目详情页首屏。
+
+         放在 Works 的 VIEW MORE 之后、电影院段之前——它是一个作品，所以归在 Works
+         这一段的末尾；电影院段往后才开始 BREAK 的内容。要挪位置的话整段搬走即可，
+         它不依赖上下文任何东西。
+
+         ⚠ 关于和参考站的三处**有意不同**，都不是做漏了：
+         1. **底图之上的字用站里的字体（Bebas Neue）**，参考站用的是
+            Neue Haas Grotesk Display 600。换字体等于动全站字体体系，需用户点头。
+         2. **左右边距用站里的 `--edge`**，不是参考站的 9.1%。这一段要和上面的
+            Works 卡、下面的 BREAK 段对齐，站内一致比对齐别人的站重要。
+         3. **CTA 用站里的洋红 #C30750**（门洞那个色），不是参考站的亮品红。
+            PITFALLS 有一条：碰参考图的颜色前必须先单独确认配色。
+
+         ⚠ 文字：分类标签（XR / INSTALLATION…）和 FOR / WITH / OFFICIAL SELECTION /
+         FINALIST 这些是通用结构词，照搬。但**具体的合作方、电影节、奖项名和那句简介
+         全部是占位**——参考站那些是 Distil 那个真实项目拿到的，照搬等于把别人的
+         项目和荣誉写成自己的。等用户给真实内容再替换。 -->
+    <section class="home-vr" aria-labelledby="vr-title">
+      <div class="vr-stage">
+        <!-- 底图单独一层：滚动时它自己做视差，和上面的文字分开走。 -->
+        <div class="vr-bg" aria-hidden="true">
+          <img src="assets/homepage/scroll/break/2.2.png" alt="" decoding="async">
+        </div>
+        <div class="vr-content">
+          <div class="vr-meta">
+            <ul class="vr-tags">
+              <li><span class="line">GAME DEMO</span></li>
+              <li><span class="line">2D GAME</span></li>
+              <li><span class="line">NARRATIVE DESIGN</span></li>
+              <li><span class="line">PIXEL ART</span></li>
+              <li><span class="line">UNITY</span></li>
+            </ul>
+            <div class="vr-credits">
+              <div class="vr-credit">
+                <p class="vr-credit-label"><span class="line">FOR</span></p>
+                <p class="vr-credit-name"><span class="line">PARTNER</span></p>
+              </div>
+              <div class="vr-credit">
+                <p class="vr-credit-label"><span class="line">WITH</span></p>
+                <p class="vr-credit-name"><span class="line">PARTNER</span></p>
+              </div>
+              <div class="vr-credit">
+                <p class="vr-credit-label"><span class="line">OFFICIAL SELECTION</span></p>
+                <p class="vr-credit-name"><span class="line">FESTIVAL</span></p>
+              </div>
+              <div class="vr-credit">
+                <p class="vr-credit-label"><span class="line">FINALIST</span></p>
+                <p class="vr-credit-name"><span class="line">AWARD</span></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="vr-heading">
+            <h2 class="vr-title" id="vr-title"><span class="line">GAME DEMOS</span></h2>
+            <!-- 标题下面那条线。参考图里它紧贴标题基线，从左边一直拉到标题右端。 -->
+            <div class="vr-rule" aria-hidden="true"></div>
+            <p class="vr-sub"><span class="line">A series of Global Game Jam demos and indie games.</span></p>
+          </div>
+
+          <!-- 2026-09-16：用户要求删除底部附图+箭头（原 vr-foot：figure.vr-inset + a.vr-cta）。 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 2026-09-16：GAME DEMOS 与下一段之间的空白里，左侧新增三张叠放的游戏卡片
+         （参考 21st.dev 的 Image Stack Carousel：前一张正对，后两张依次转角度、
+         往右上错开，露出边缘）。可拖拽/点击最前面那张切到最底层，逻辑在
+         js/homepage-vr-stack.js；图片初始顺序不重要，脚本会按数组顺序摆放。
+         右侧文字格式照抄上面 ALONE IN KYOTO（.break-project-info 那一套：
+         标签 .work-tags → 标题 h2 → 来源 .break-project-credit），内容从
+         site/break/js/break-data.js 抄的真实数据（bubble-delivery / demo-1
+         THE CRAFTSMAN / demo-2 FADING ONE）。每张 img 用 data-* 存自己的那份文字，
+         js/homepage-vr-stack.js 在切换时把当前最前面那张的数据写进右侧面板。 -->
+    <div class="vr-game-stack-row">
+      <div class="vr-game-stack" role="group" tabindex="0"
+           aria-label="游戏 demo 卡片堆叠，可拖拽或按回车切换顺序">
+        <img src="assets/homepage/scroll/break/游戏1.png" decoding="async" loading="lazy"
+             alt="BUBBLE DELIVERY 游戏 demo 封面"
+             data-slug="bubble-delivery"
+             data-title="BUBBLE DELIVERY"
+             data-credit="Global Game Jam · Game Designer &amp; Visual Artist"
+             data-highlight="true"
+             data-tags="GAME DEMO,2D GAME,AUDIO INTERACTION,UNITY,PC">
+        <img src="assets/homepage/scroll/break/游戏2.png" decoding="async" loading="lazy"
+             alt="THE CRAFTSMAN 游戏 demo 场景（密集红色眼睛）"
+             data-slug="demo-1"
+             data-title="THE CRAFTSMAN"
+             data-credit="Global Game Jam · Game Designer &amp; Visual Artist"
+             data-highlight="true"
+             data-tags="GAME DEMO,2D GAME,PUZZLE,LEVEL DESIGN,UNITY">
+        <img src="assets/homepage/scroll/break/游戏3.png" decoding="async" loading="lazy"
+             alt="FADING ONE 游戏 demo 场景（像素风老街）"
+             data-slug="demo-2"
+             data-title="FADING ONE"
+             data-credit="Independent Game · Game Designer &amp; Visual Artist"
+             data-tags="GAME DEMO,2D GAME,NARRATIVE DESIGN,PIXEL ART,UNITY">
+      </div>
+      <div class="vr-stack-info">
+        <ul class="work-tags" aria-label="当前卡片的项目标签"></ul>
+        <button class="vr-stack-title break-title-interactive" id="gameDemoDetailTrigger" type="button" aria-label="查看游戏 Demo 项目详情"><span class="break-title-inner"></span></button>
+        <p class="break-project-credit vr-stack-credit"></p>
+      </div>
+    </div>
+
+    <!-- 2026-09-16：用户要求把原来放在 THE NEW IDENTITY CARD 之后的 View more (N6)
+         挪到游戏 demo 卡片组下面——沿用 Works「View all」同款箭头与排版（.works-outro /
+         .view-all，特效跟上面一样，靠复用同一套 class 实现，没有另写样式）。 -->
+    <div class="works-outro install-outro">
+      <a class="view-all" href="../break/break.html">
+        <span class="view-all-label">View all</span>
+        <svg class="view-all-arrow" viewBox="-8 -1 26 14" width="23" height="12" aria-hidden="true" focusable="false"><polyline points="-6,7.5 15.5,7.5"/><polyline points="12,4 15.5,7.5 12,11"/></svg>
+      </a>
+      <p>( N6 )</p>
+    </div>
+
+    <!-- 空间装置 THE NEW IDENTITY CARD。
+         2026-09-08 第二次重做：**结构整体照搬 noth.in 的 `section.glitch`**（线上实测 + 读源码）。
+
+         位置：接在 VR 段（BELONGINGS）之后（用户指定），属于 BREAK 这一段的第三个项目。
+         要挪走整段搬即可，它不依赖上下文任何东西。
+
+         ★★ 这一段最容易做反的一件事：**底图不是铺满一屏的背景，它是一张按页面宽度
+            平铺的长图，段落多高完全由图自己决定。** 参考站实测：
+              section.glitch 高 1536px  ==  img 铺满 1536 宽后的高度 1536px（图是 1:1）
+              img 是 position:static、width:100%、height:auto，**没有 object-fit:cover**
+            所以图天然顶着段落上边开始，往下能露多少露多少，滚过去就是滚过去。
+            被钉住的**只有文字那一层**（.install-text-layer > .install-sticky, 100svh）。
+            "滚动感"就是从这里来的：字停着不动，图从字后面流过去。
+            ⚠ 上一版把图做成 sticky 里的 object-fit:cover，等于把图压成一屏再裁掉，
+              图是死的，整段也就没有推进感。**不要改回去。**
+
+         结构对照（左=本站，右=参考站）：
+              .install-bg          =  .glitch-img-w      正常流，段落高度的来源
+              .install-text-layer  =  .glitch-text-w     absolute inset:0
+              .install-sticky      =  .glitch-text-sticky-w  sticky top:0 / 100svh
+              .install-drifts      =  .img-glitch-w      absolute bottom:0 / z-index 10
+
+         ⚠ 全出血，左右没有 --edge。参考站这一段就是贴满视口宽的，而且下面五组小字和
+           两张飘浮图的百分比落点全部是按**整个视口宽度**量的，加回内边距会让落点整体错位。
+           要恢复站内出血系统，改 CSS 的 .home-install / .install-drifts 两处即可。
+
+         ⚠ 五组小字的落点是在参考站线上量的（视口 1536×695，换算成百分比写在 CSS 的
+           --x / --y 里）。横向和上一版量参考图得到的结果差不到 0.1%，纵向修正了 2–3%。
+
+         ⚠ 文案是占位。参考站那几行是他们自己的品牌语，**一个字都没照抄**——按 HANDOFF
+           里那条"只借节奏，不借措辞"，这里换成了和这件作品同题的句子。改下面五处即可。
+
+         ⚠ 第四行的"乱码"和 PITFALLS [2026-08-27] 那条"Break 段不得再叠加乱码"正面冲突。
+           这次是用户指名要参考站这个效果才加的，单独放在 .install-shard-noise 上，
+           要去掉删这一行即可，其余三行不受影响。 -->
+    <section class="home-install" aria-label="空间装置：THE NEW IDENTITY CARD">
+      <!-- 段落高度的来源。图有多高，这一段就有多高——别给它任何 height / object-fit。 -->
+      <div class="install-bg" aria-hidden="true">
+        <!-- ⚠ width/height 属性不能省：这一段的高度就是这张图的高度，
+             没有固有尺寸的话图下载完之前段落是 0 高，ScrollTrigger 会按 0 算起止点。
+             换图时这两个数要跟着改（CSS 里的 aspect-ratio 同理）。 -->
+        <img src="assets/homepage/scroll/break/7装置.png" width="1920" height="2356"
+             decoding="async" loading="lazy"
+             alt="空间装置 THE NEW IDENTITY CARD：展厅里投影着身份证件的半透明立方体">
+      </div>
+      <button class="install-detail-trigger" id="installDetailTrigger" type="button" aria-label="查看 THE NEW IDENTITY CARD 项目详情"></button>
+
+      <!-- 文字层：铺满整段的透明罩，内层钉住一屏。 -->
+      <div class="install-text-layer">
+        <div class="install-sticky">
+        <div class="install-shards" aria-hidden="true">
+          <p class="install-shard install-shard-a">
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line install-shard-noise">Ev3ry ﬁ*(e i§  ﬁ1ed .  ///</span>
+          </p>
+          <p class="install-shard install-shard-b">
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line install-shard-noise">Ev3ry ﬁ*(e i§  ﬁ1ed .  ///</span>
+          </p>
+          <p class="install-shard install-shard-c">
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line install-shard-noise">Ev3ry ﬁ*(e i§  ﬁ1ed .  ///</span>
+          </p>
+          <p class="install-shard install-shard-d">
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line install-shard-noise">Ev3ry ﬁ*(e i§  ﬁ1ed .  ///</span>
+          </p>
+          <p class="install-shard install-shard-e">
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line">EVERY FACE IS FILED</span>
+            <span class="shard-line install-shard-noise">Ev3ry ﬁ*(e i§  ﬁ1ed .  ///</span>
+          </p>
+        </div>
+
+        <!-- 中间那句话：跟着滚动逐字点亮（不是整句淡入）。
+             它在钉住的这一屏里，两张飘浮图会从它上面盖过去——参考站里这句话就是
+             被图压住、只露出几行的，这个前后关系是效果的一部分。
+             ⚠ 逐字点亮这条是查过的：参考站 .finaltext 里就是 59 个字符 span，
+               静止时全部 opacity:0，所以确实是逐字，不是整句淡入、也不是遮罩推入。
+             ⚠ 位置/字号按参考站线上实测：**中心点**在左 45.8% / 上 28.8%（元素自己
+               translate(-50%,-50%)），宽 8.3%，字号和四周的散落小字完全一样。 -->
+        <p class="install-statement">
+          SO WE BEAT ON, BOATS AGAINST THE CURRENT, BORNE BACK CEASELESSLY INTO THE PAST.
+        </p>
+        </div>
+      </div>
+
+      <!-- 两张飘浮图（2026-09-08 按 noth.in `section.glitch` 实测重做）。
+
+           ⚠ 它们**故意放在 .install-text-layer 外面**，是段落的直接子元素。
+             参考站也是这个结构（.img-glitch-w 和 .glitch-text-w 是兄弟）：
+             图不跟着钉住，而是待在段落底部、随页面往上走，再叠加一层自己的位移，
+             所以会"飘过"钉住的那一屏。放进 sticky 里就只能在原地缩放，
+             做不出穿过画面的感觉。
+
+           ⚠ 只有两张，不是五张。参考站那一屏就是两张：一张宽的偏左、一张窄的偏右。
+             多出来的三张是本站早先自己加的，照搬时已移除（图片文件保留在
+             assets/homepage/scroll/，随时能加回来）。
+
+           实测落点（视口 1536 宽，百分比相对**整个视口宽度**，不是内容宽度）：
+             图1 左 24.67% / 宽 28.26% / 比例 434:355 = 1.222
+             图2 左 61.91% / 宽 13.41% / 比例 206:291 = 0.708
+           两张的**底边都对齐段落底边**（实测：355+1181 = 291+1245 = 1536 = 段落高），
+           起始各自往下推 100px 藏在段外，靠位移往上飘进来。 -->
+      <div class="install-drifts">
+        <button class="install-drift install-drift-1 install-drift--interactive" type="button" aria-label="查看 JASON WAS BORN 项目详情">
+          <img src="assets/homepage/scroll/break/卡片1.png" alt="" loading="lazy" decoding="async">
+        </button>
+        <button class="install-drift install-drift-2 install-drift--interactive" type="button" aria-label="查看 JASON WAS BORN 项目详情">
+          <img src="assets/homepage/scroll/break/卡片2.png" alt="" loading="lazy" decoding="async">
+        </button>
+      </div>
+    </section>
+
+    <!-- ⚠ 2026-09-08：这里原来有三段，全部按用户要求删除：
+           1. `.home-studio`  —— FORMS FOLLOW PERSPECTIVE + WE DESIGN 服务清单 + 坠落大字
+           2. `.home-people`  —— NOTHING WITHOUT PEOPLE + 团队名单 + 占位影像
+           3. `.home-glitch`  —— WE CREATE EXPERIENCES… 逐字显影 + VIEW MORE
+         三段都是从参考站复刻期留下来的工作室型内容，和「homepage 只有
+         opening / works / break / contact 四个部分」对不上。
+
+         它们的 CSS 和 JS 都**保留着**（`.home-studio` / `.falling-statement` /
+         `.home-people` / `.home-glitch` 的样式，`setupStudioParallax()` 的坠落分支、
+         `setupGlitch()`），要恢复把 HTML 放回来即可，别当成死代码删掉。
+         `id="studio"` / `id="break"` 这两个锚点没有任何地方引用（导航走的是
+         archive 里的独立页面），删掉不影响链接。
+
+         规划中的下文（用户 2026-09-08 口述，素材还没给）：
+         空间装置 → JASON WAS BORN（视觉项目）→ 变黑 → 结尾 slogan → THE ART OF MZ。
+         JASON WAS BORN 那一段等素材，位置就插在这条注释和页脚之间。 -->
+
+    <footer class="home-footer" id="contact">
+      <!-- 结尾这一段从黑幕里"镂空"，露出红色背景（2026-09-08 用户要求：
+           "slogan 到底部是镂空的，没有黑色遮挡，能看到红色的背景"）。
+
+           铺的是 `works-hero.jpg`——当初为 Works 段截的**真实渲染快照**
+           （门开满、整屏变红的那一屏），不是手画的渐变。
+           它是 `background-attachment: fixed` 的：红一直在幕布后面，
+           黑幕只是在这里被挖开，不是贴了一张会跟着滚的图。
+           接缝由 .home-footer::before 化开，不是硬切。详见 CSS 那一段。 -->
+      <div class="footer-bg" aria-hidden="true"></div>
+
+      <!-- ⚠ 2026-09-08：这里原来是 `.footer-images`——页脚上半部分的两张并排占位图
+           （orb-study.png / light-study.png）。用户指名删除，说"不需要这两张图"。
+           `.footer-images` 的 CSS 还留着（见 CSS 里那一段），把这一行放回来就能恢复，
+           别当死代码删掉。两个图片文件也保留在 assets/homepage/scroll/。 -->
+      <div class="footer-cta"><h2><span class="line">If something resonates, let's take it further.</span></h2></div>
+      <!-- ⚠ 2026-09-08：这里原来是 `.footer-meta`——左边一句 ©2026 MINNIE ZHUANG、
+           右边一排页脚导航（HOME / WORKS / BREAK / CONTACT）。
+           版权那句按用户原型图挪到了大字下面（见 .footer-signature）；
+           那排导航用户指名删除（"把红字上面多出来的页签删掉"）。
+           `.footer-meta` 的 CSS 还留着，把下面这行放回来就能恢复，别当死代码删：
+      <div class="footer-meta"><nav aria-label="页脚导航"><a href="../../archive/v1-static-site/index.html">HOME</a><a href="../works/works.html">WORKS</a><a href="../../archive/v1-static-site/break.html">BREAK</a><a href="../../archive/v1-static-site/about.html">CONTACT</a></nav></div>
+      -->
+
+      <!-- 页脚落款（2026-09-08 按用户原型图重做）：一行顶天立地的红色大字，
+           下面压一行小字。大字要**正好铺满两条内容线之间**，所以字号不能写死，
+           要跟着容器宽度走——外面这个 div 是量宽度的容器，字在里面的 span 上。
+           详见 CSS 里 .footer-wordmark 那一段。 -->
+      <div class="footer-wordmark"><span>THE ART OF MZ</span></div>
+      <div class="footer-signature">
+        <!-- 2026-09-09 大小写归并：这两行原来一行全大写、一行混排，人名写法也不一致。
+             统一成混排 + 人名首字母大写。 -->
+        <p>©2026 Minnie Zhuang</p>
+        <a href="mailto:hello@example.com">Email</a>
+        <a href="assets/homepage/scroll/简历-游戏.png" target="_blank" rel="noopener">Resume</a>
+        <p>Site / Visuals / Works all by Minnie Zhuang</p>
+      </div>
+    </footer>
+  </main>
+
+  <script src="js/homepage-portal.js"></script>
+  <!-- 顶部导航的触屏展开。没有依赖，放这里最早生效。 -->
+  <script src="js/homepage-portal-nav.js"></script>
+  <!-- GAME DEMOS 段下方的可拖拽卡片堆叠，纯 DOM + Pointer Events，不依赖 gsap/Lenis。 -->
+  <script src="js/homepage-vr-stack.js"></script>
+
+  <!-- three.js 是本地文件，不走 CDN，断网也能用。
+       importmap 的作用相当于一张地名对照表：告诉浏览器 "three" 指的是哪个文件。 -->
+  <script type="importmap">
+  { "imports": { "three": "./js/lib/three.module.js" } }
+  </script>
+  <script type="module" src="js/homepage-portal-3d.js"></script>
+  <script src="js/lib/gsap.min.js"></script>
+  <script src="js/lib/ScrollTrigger.min.js"></script>
+  <script src="js/lib/lenis.min.js"></script>
+  <!-- 轮播先建立 pin 占位；随后滚动叙事才量 BREAK 的真实文档位置。
+       若反过来，BREAK 的一次性文字入场会在 pin 补出的区间里提前完成，
+       看起来就像完全没有动画。 -->
+  <!-- Works 项目数据：直接引用 site/works/ 下的同一份文件，不复制内容
+       （见上面 .home-works-detail 的注释）。 -->
+  <script src="../works/js/works-data.js"></script>
+  <script src="js/homepage-works-detail.js"></script>
+  <script src="js/homepage-portal-carousel.js"></script>
+  <!-- Kyoto 详情沿用 Break 的正式数据；交互脚本只绑定 Home 中 Kyoto 的标题与右图。 -->
+  <script src="../break/js/break-data.js"></script>
+  <script src="js/homepage-kyoto-detail.js"></script>
+  <script src="js/homepage-game-demo-detail.js"></script>
+  <script src="js/homepage-game-demo-cursor.js"></script>
+  <script src="js/homepage-jason-detail.js"></script>
+  <script src="js/homepage-install-detail.js"></script>
+  <script src="js/homepage-portal-scroll.js"></script>
+  <script src="js/homepage-portal-works.js"></script>
+  <!-- Home → Works/Break 的离场遮幕。必须在 gsap 已加载之后，才可在跳页前完成遮幕。
+       共用逻辑在 route-transition.js，这个页面的入口配置在 homepage-route-transition.js。 -->
+  <script src="../shared/js/route-transition.js"></script>
+  <script src="js/homepage-route-transition.js"></script>
+  <!-- 入场动画。放在最后：它要用 gsap，也要等前面那些脚本把标题量完。 -->
+  <script src="js/homepage-portal-intro.js"></script>
+</body>
+</html>

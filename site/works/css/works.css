@@ -1,0 +1,665 @@
+:root {
+  --red: #e00000;
+  --paper: #f2efec;
+  --muted: rgba(242, 239, 236, .58);
+  --quiet: rgba(242, 239, 236, .26);
+  --black: #050606;
+  --edge: clamp(20px, 3.96vw, 64px);
+  --t-label: 12px;
+  --ls-label: .045em;
+  --ease: cubic-bezier(.76, 0, .24, 1);
+  --screen-rgb: 166, 211, 216;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  background: var(--black);
+  color: var(--paper);
+  font-family: 'Jaldi', sans-serif;
+  overflow: hidden;
+}
+
+button,
+a { font: inherit; }
+
+button { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- shared navigation ---------- */
+
+.site-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 27px var(--edge);
+  pointer-events: none;
+}
+
+.nav-logo {
+  color: var(--red);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: .2px;
+}
+
+.nav-menu {
+  --nav-open: 0;
+  position: relative;
+  margin-top: 8.5px;
+  text-align: right;
+  pointer-events: auto;
+}
+
+.nav-current {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.nav-links {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .13em;
+  padding: .13em 0 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.nav-slot { overflow: hidden; padding-left: 10px; margin-left: -10px; }
+
+.nav-slot .nav-link {
+  display: block;
+  transform: translateY(calc((1 - var(--nav-open)) * 100%));
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1), opacity .42s cubic-bezier(.16, 1, .3, 1);
+}
+
+.nav-menu:hover,
+.nav-menu:focus-within { --nav-open: 1; }
+
+.nav-menu:hover .nav-links,
+.nav-menu:focus-within .nav-links { pointer-events: auto; }
+
+.nav-link {
+  position: relative;
+  display: inline-block;
+  color: #d8d5d6;
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: var(--t-label);
+  letter-spacing: var(--ls-label);
+  text-decoration: none;
+  opacity: .62;
+  transition: opacity .3s ease;
+}
+
+.nav-link::after {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  content: '';
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+.nav-link.active { color: var(--red); opacity: 1; }
+.nav-link.active::after,
+.nav-link:hover::after,
+.nav-link:focus-visible::after { transform: scaleY(1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-menu:hover .nav-link { opacity: .3; }
+  .nav-menu:hover .nav-link:hover,
+  .nav-menu .nav-link:focus-visible { opacity: 1; }
+}
+
+/* ---------- two-part works home ---------- */
+
+.works-stage { position: fixed; inset: 0; overflow: hidden; }
+
+/* Home 的遮幕盖满之后，Works 从同一块黑色遮幕下露出。
+   这层只由一次性的 works-route-armed 状态显示，直接访问与刷新不会出现。 */
+.works-route-veil { display: none; }
+
+html.works-route-armed .works-route-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+  background: var(--black);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+/* 首次进入只遮住既有层，不改任何一层的最终布局。JS 在首帧完成后解除这组状态。 */
+html.works-intro-armed .site-nav {
+  opacity: 0;
+  transform: translateY(-18px);
+}
+
+html.works-intro-armed .works-gallery-pane {
+  clip-path: inset(0 100% 0 0);
+}
+
+html.works-intro-armed .television-pane {
+  opacity: 0;
+  transform: scale(1.025);
+}
+
+html.works-intro-armed .television-copy > * {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.works-gallery-pane {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: min(40vw, 650px);
+  min-width: 440px;
+  background:
+    linear-gradient(90deg, rgba(5, 6, 6, 1) 0%, rgba(5, 6, 6, .97) 72%, rgba(5, 6, 6, 0) 100%),
+    radial-gradient(ellipse at 2% 80%, rgba(32, 43, 46, .22), transparent 51%);
+}
+
+.works-gallery {
+  position: absolute;
+  --channel-collapsed-width: clamp(160px, 12vw, 212px);
+  --channel-expanded-width: clamp(340px, 25vw, 462px);
+  --channel-height: clamp(112px, 14vh, 166px);
+  --channel-gap: clamp(18px, 1.8vh, 40px);
+  --channel-transition: 1.45s;
+  --channel-ease: cubic-bezier(.22, 1, .36, 1);
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  cursor: grab;
+  user-select: none;
+  /* 卡片滚出/滚入这个框的上下边缘时改成淡出/淡入，而不是被 overflow 硬切掉。
+     渐隐区只占上下各 15%，中间的进度指示器（23.72%~76.28%）不受影响。 */
+  mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 15%, #000 85%, transparent);
+}
+
+/* 2026-09-15：不再用一个 translateY 统一挪动整条 flex 队列——每张卡自己
+   按"离当前弹簧值最短的环形距离"算 transform（见 works.js 的
+   renderCards），track 本身只是给这些绝对定位的卡当容器（做法和
+   site/break 的画廊一致，只是这边左对齐、Break 右对齐）。 */
+.gallery-track {
+  position: absolute;
+  inset: 0;
+}
+
+.gallery-card {
+  position: absolute;
+  top: 0;
+  left: clamp(160px, 13vw, 230px);
+  width: var(--channel-collapsed-width);
+  height: var(--channel-height);
+  overflow: hidden;
+  background: #090a0a;
+  cursor: pointer;
+  will-change: width, transform;
+  transition: width var(--channel-transition) var(--channel-ease);
+}
+
+.gallery-card::before {
+  display: none;
+}
+
+.gallery-card::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, rgba(5, 6, 6, .48), rgba(5, 6, 6, .08) 65%, rgba(5, 6, 6, .32));
+  content: '';
+  opacity: .42;
+  pointer-events: none;
+  transition: opacity var(--channel-transition) var(--channel-ease);
+}
+
+.gallery-card.is-expanded { width: var(--channel-expanded-width); }
+.gallery-card.is-expanded::after { opacity: .18; }
+
+.gallery-card-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(.92) brightness(.48);
+  transform: scale(1.04);
+  transition: filter var(--channel-transition) var(--channel-ease), transform var(--channel-transition) var(--channel-ease);
+}
+
+.gallery-card.is-active .gallery-card-image {
+  filter: saturate(1) brightness(.78);
+  transform: scale(1);
+}
+
+.gallery-index {
+  position: absolute;
+  top: 23.72%;
+  bottom: 23.72%;
+  left: var(--edge);
+  z-index: 4;
+  width: 72px;
+  color: rgba(242, 239, 236, .46);
+  font-size: 13px;
+  letter-spacing: .08em;
+  pointer-events: none;
+}
+
+.gallery-index-line {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  /* 首尾循环之后这条线不再代表"有始有终"的列表，两端改成向外淡出，
+     不再是硬切的端点——避免和下面无缝循环的滚动逻辑打架。只淡这条底
+     色轨道自己，子元素 i（当前位置的白色滑块）用的是自己的 background，
+     不吃这条渐变，所以滑块始终保持实色，不会跟着变淡。 */
+  background: linear-gradient(to bottom,
+    transparent,
+    rgba(242, 239, 236, .15) 18%,
+    rgba(242, 239, 236, .15) 82%,
+    transparent);
+}
+
+.gallery-index-line i {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  background: rgba(242, 239, 236, .86);
+  content: '';
+  transition: top var(--channel-transition) var(--channel-ease), height var(--channel-transition) var(--channel-ease);
+}
+
+.gallery-index-current {
+  /* 2026-09-15：用户要求去掉这串数字，只留线和滑块——更克制。 */
+  display: none;
+}
+
+.gallery-index-total {
+  /* 循环列表没有真正的"总数/终点"，这个数字永远不显示。 */
+  display: none;
+}
+
+.television-pane {
+  position: absolute;
+  inset: 0 0 0 max(34vw, 420px);
+  z-index: 1;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 48% 68%, rgba(var(--screen-rgb), .045), transparent 18%),
+    radial-gradient(ellipse at 45% 95%, rgba(101, 125, 128, .018), transparent 42%),
+    #050606;
+  transition: background .7s ease;
+}
+
+.television-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.television-pane.is-fallback {
+  background-image:
+    linear-gradient(90deg, #050606 0%, transparent 28%),
+    url('../assets/television/television-water-preview.png');
+  background-position: center;
+  background-size: cover;
+}
+
+.television-pane.is-fallback .television-canvas { display: none; }
+
+.television-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #050606 0%, transparent 19%, transparent 80%, #050606 100%),
+    linear-gradient(180deg, rgba(5, 6, 6, .8), transparent 24%, transparent 72%, rgba(5, 6, 6, .76));
+}
+
+.television-pane::after {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  background-size: 160px;
+  content: '';
+  mix-blend-mode: soft-light;
+  opacity: .13;
+  pointer-events: none;
+}
+
+.television-copy {
+  position: absolute;
+  right: var(--edge);
+  top: 50%;
+  z-index: 2;
+  width: min(330px, 32vw);
+  text-align: right;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.television-name {
+  position: relative;
+  display: block;
+  width: fit-content;
+  margin: 18px 0 0 auto;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(36px, 4vw, 54px);
+  font-weight: 400;
+  line-height: .84;
+  letter-spacing: .04em;
+  text-align: right;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.television-name-inner {
+  display: inline-block;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.television-name::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 1px;
+  height: 100%;
+  background: var(--red);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .television-name:hover::after {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .television-name::after {
+    transition: none;
+  }
+}
+
+.television-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  width: min(420px, 43vw);
+  margin: 0 0 0 calc(100% - min(420px, 43vw));
+  list-style: none;
+}
+
+.television-tags li {
+  border: 1px solid rgba(242, 239, 236, .16);
+  background: rgba(8, 5, 11, .18);
+  padding: 4px 7px 3px;
+  color: rgba(242, 239, 236, .46);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+.television-credit {
+  margin-top: 20px;
+  color: rgba(242, 239, 236, .32);
+  font-family: 'Jaldi', sans-serif;
+  font-size: 16px;
+  font-style: italic;
+  line-height: 1.2;
+}
+
+/* 2026-09-15：用户要求把真实雇主名（腾讯/网易系）在这行里更显眼，
+   校内项目、Game Jam 这类不算——只对指名的项目加 highlightCompany 标记，
+   见 works.js 的 updateTelevision()。 */
+.television-credit .credit-company {
+  color: var(--paper);
+}
+
+/* ---------- existing project detail reader ---------- */
+
+/* position: fixed 而不是 absolute——这一层现在是 .site-nav 的兄弟节点
+   （不再嵌套在 .works-stage 里，见 works.html），absolute 会失去参照物。
+   z-index 60 > .site-nav 的 50，两者是直接兄弟，可以直接比较层级，
+   不需要再借 .works-stage 整层提升（那样会把画廊页/电视场景也提上去，
+   导致弹窗还只是屏幕中央一个小方块时，导航就已经整个瞬间消失）。 */
+.works-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  visibility: hidden;
+  background: rgba(5, 6, 6, .98);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.works-detail.is-visible { visibility: visible; opacity: 1; pointer-events: auto; }
+
+
+/* 入场时被整体位移的那一层。`inset: 0` 让它和 .works-detail 完全重合，
+   里面两个 absolute 子元素的坐标系因此一像素没变（几何不受影响）。
+   它自己不接收指针事件，只有图带需要拖拽，单独打开。 */
+.works-detail-stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.works-detail-pages {
+  position: absolute;
+  pointer-events: auto;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 72%;
+  padding: 0 0 0 var(--edge);
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: grab;
+  scroll-behavior: auto;
+}
+
+.works-detail-pages.is-dragging { cursor: grabbing; scroll-behavior: auto; }
+.works-detail-pages::-webkit-scrollbar { display: none; }
+
+.works-detail-page { flex: 0 0 auto; height: 88%; -webkit-user-drag: none; user-select: none; }
+
+/* 2026-09-15：原来是 bottom:120px 贴底，内容行数不同会导致顶边高低不一
+   （标签多/说明长的项目顶边被往上顶）。改成 top:72vh 贴顶——72vh 正好是
+   图带容器 .works-detail-pages 的高度，文字紧跟在图带下面，所有项目的
+   标题起点因此严格一致，各自往下长多少由内容决定，不再影响起点。 */
+.works-detail-info { position: absolute; top: calc(72vh + 18px); left: var(--edge); max-width: 46ch; }
+.works-detail-name { display: none; }
+.works-detail-name-zh { font-family: 'DengXian', '等线', sans-serif; font-size: 15px; letter-spacing: .02em; }
+/* 2026-09-15：改成固定列宽自动换行、两端对齐，宽度取自第一个项目
+   （PARADOX HEAVEN）第一行实测宽度（390px），和 Break 的处理方式一致
+   （见 site/break/css/break.css 的 .break-detail-desc 同一条注释）。 */
+.works-detail-desc { margin-top: 10px; width: 390px; color: var(--muted); font-size: 12px; line-height: 1.5; font-family: 'DengXian', '等线', 'Jaldi', sans-serif; white-space: pre-wrap; text-align: justify; }
+
+.works-detail-links { position: absolute; left: var(--edge); bottom: 45px; display: flex; gap: 24px; pointer-events: auto; }
+
+.works-detail-link {
+  position: relative;
+  color: var(--muted);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-decoration: none;
+  transition: color .3s ease;
+}
+
+.works-detail-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .4s cubic-bezier(.16, 1, .3, 1);
+}
+
+.works-detail-link:hover { color: var(--paper); }
+.works-detail-link:hover::after { transform: scaleX(1); }
+
+.works-close {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--quiet);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--paper);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.works-close:hover { border-color: var(--paper); }
+
+.works-detail-nav { position: absolute; right: var(--edge); bottom: 45px; display: flex; gap: 20px; }
+
+/* ---------- detail page image lightbox ---------- */
+
+.works-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(2, 2, 2, .97);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .28s ease;
+}
+
+.works-lightbox.is-visible { visibility: visible; opacity: 1; pointer-events: auto; }
+
+.works-lightbox-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 72px var(--edge);
+}
+
+/* 用 display:block + margin:auto 居中，不用 flex justify-content:center——
+   放大后图片比容器宽，flex 那种居中方式在多个浏览器里会让你没法滚到
+   最左边（溢出部分被居中算法"腾"没了），block 布局没有这个问题。 */
+.works-lightbox-img {
+  display: block;
+  width: auto;
+  max-width: 92vw;
+  height: auto;
+  margin: 0 auto;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.works-lightbox-img.is-zoomed {
+  max-width: none;
+  width: var(--zoom-width, 180vw);
+  margin: 0;
+  cursor: grab;
+}
+
+.works-lightbox-img.is-zoomed.is-panning { cursor: grabbing; }
+
+/* 放右上角，不跟 .works-close（退出整个项目详情，在正中间下方）撞位置——
+   这一层是叠在详情页上面的二级弹层，两个不同功能的关闭按钮分开放，
+   不会让人误以为点这个会连详情页一起关掉。 */
+.works-lightbox-close {
+  position: fixed;
+  top: 28px;
+  right: var(--edge);
+  z-index: 71;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--quiet);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--paper);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.works-lightbox-close:hover { border-color: var(--paper); }
+.works-nav-btn {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'Special Gothic Expanded One', sans-serif;
+  font-size: 11px;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: color .3s ease, transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+.works-nav-btn:hover { color: var(--paper); transform: scale(1.08); }
+
+/* 和顶部导航 .nav-link::after 同一套语言：竖线从中心 scaleY 展开。
+   PREV 往左走，线出现在左边；NEXT 往右走，线出现在右边。 */
+.works-nav-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: .82em;
+  margin-top: -.41em;
+  background: var(--red);
+  transform: scaleY(0);
+  transition: transform .5s cubic-bezier(.16, 1, .3, 1);
+}
+#navPrev::after { left: -8px; }
+#navNext::after { right: -8px; }
+.works-nav-btn:hover::after { transform: scaleY(1); }
+
+:focus-visible { outline: 1px solid var(--paper); outline-offset: 5px; }
+
+@media (max-width: 900px) {
+  html, body { overflow: auto; }
+  .works-stage { position: relative; min-height: 100dvh; overflow: visible; }
+  .works-gallery-pane { position: relative; width: 100%; min-width: 0; min-height: 100dvh; background: var(--black); }
+  .works-gallery { inset: 106px var(--edge) 38px; }
+  .gallery-index { left: 0; }
+  .gallery-card { min-height: 0; }
+  .television-pane { position: relative; inset: auto; height: 75dvh; }
+  .television-copy { right: var(--edge); top: 50%; width: min(300px, 72vw); }
+  .television-tags { width: 100%; margin-left: 0; }
+  .works-detail { position: fixed; }
+  .works-detail-pages { height: 66%; padding: 0 var(--edge); }
+  .works-detail-page { height: 76%; }
+  .works-detail-info { right: var(--edge); bottom: 104px; }
+  .works-detail-nav { right: var(--edge); bottom: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
+}

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home 字体功能分类表</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101010; --panel:#181818; --line:#383838; --muted:#9c9c98; --text:#f1f1ed; --accent:#e6677f; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Arial, "Microsoft YaHei", sans-serif; }
+    main { width:min(1440px, calc(100% - 64px)); margin:auto; padding:72px 0 100px; }
+    .eyebrow { margin:0 0 18px; color:var(--accent); font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:0; font-size:clamp(38px, 5.2vw, 76px); font-weight:500; letter-spacing:-.045em; line-height:.92; }
+    .intro { max-width:690px; margin:28px 0 62px; color:var(--muted); font-size:15px; line-height:1.55; }
+    .rule { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 38px; }
+    .rule span { padding:6px 9px; border:1px solid var(--line); color:#c8c8c5; font-size:11px; }
+    .rule b { color:var(--accent); font-weight:500; }
+    .section-head { display:flex; justify-content:space-between; align-items:end; padding-bottom:14px; border-bottom:1px solid var(--line); }
+    h2 { margin:0; font-size:19px; font-weight:500; letter-spacing:-.02em; }
+    .section-head span { color:var(--muted); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .table-wrap { overflow-x:auto; border:1px solid var(--line); border-top:0; background:var(--panel); }
+    table { width:100%; min-width:1100px; border-collapse:collapse; text-align:left; }
+    th, td { padding:22px 18px; vertical-align:top; border-bottom:1px solid var(--line); }
+    thead th { background:#141414; color:var(--muted); font-size:10px; font-weight:500; letter-spacing:.09em; text-transform:uppercase; }
+    tbody tr:last-child th, tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover { background:#1d1b1b; }
+    tbody th { width:16%; font-size:15px; font-weight:500; line-height:1.18; }
+    td { color:#d0d0cc; font-size:13px; line-height:1.55; }
+    .id { display:block; margin-bottom:7px; color:var(--accent); font-size:10px; letter-spacing:.09em; }
+    .font { color:#f4f4f0; font-weight:500; }
+    .size { color:#f4c7cf; font-size:14px; }
+    .note { margin-top:48px; padding-top:15px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; line-height:1.6; }
+    @media (max-width:700px) { main { width:calc(100% - 32px); padding-top:44px; } .intro { margin-bottom:38px; } th, td { padding:16px 14px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Home / Type system</p>
+    <h1>字体功能<br>分类表</h1>
+    <p class="intro">先按一段字在画面中的分量排顺序，再决定它用哪种字体、要多大。这里的角色不再按「导航、分类、落款」零散拆分；它们只在视觉分量不同的时候才分层。</p>
+
+    <div class="rule">
+      <span><b>原则 01</b> 可点击不是字体层级</span>
+      <span><b>原则 02</b> 页签、标签、计数、版权、账号同属最末信息字</span>
+    </div>
+
+    <section>
+      <div class="section-head"><h2>七个功能角色</h2><span>当前计划</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>字的功能层级</th>
+              <th>字体是啥</th>
+              <th>字号是什么</th>
+              <th>计划要用在那里</th>
+              <th>当前代表是什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th><span class="id">01</span>品牌字</th>
+              <td><span class="font">Special Gothic Expanded One</span><br>有宽度与标识感的品牌字体</td>
+              <td><span class="size">Logo：17px</span><br>页脚大字不设固定字号</td>
+              <td>只在需要表明「这是 Minnie 的网站」时出现</td>
+              <td>THE ART OF MZ<br>页脚 MZ wordmark</td>
+            </tr>
+            <tr>
+              <th><span class="id">02</span>舞台主字</th>
+              <td><span class="font">Bebas Neue</span><br>适合占满画面、建立气场的标题字体</td>
+              <td><span class="size">不设固定字号</span><br>超大主视觉；一屏只出现一次</td>
+              <td>首页与页尾最主要的画面句子</td>
+              <td>MINNIE ZHUANG<br>LET'S START FROM NOTHING.</td>
+            </tr>
+            <tr>
+              <th><span class="id">03</span>内容标题</th>
+              <td><span class="font">Bebas Neue</span><br>与舞台主字同家族，但收敛为可读标题</td>
+              <td><span class="size">64px</span><br>手机：40px</td>
+              <td>章节名、项目名，以及第一眼需要定位的内容</td>
+              <td>PARADOX HEAVEN<br>NBA2K ONLINE、ALONE IN KYOTO</td>
+            </tr>
+            <tr>
+              <th><span class="id">04</span>叙事字</th>
+              <td><span class="font">Jaldi</span><br>中性、易读，用来讲一句话</td>
+              <td><span class="size">桌面统一：28px</span><br>手机完整句：18px<br>手机短标记保持原尺寸</td>
+              <td>转场、章节名、slogan 与段落间的停顿</td>
+              <td>I craft intelligent experiences…<br>Images hold a moment…<br>Selected work across intelligent systems…<br>A space for experiments, obsessions…<br>A VR piece about what people carry…<br>( Step inside )、01 Works、Break</td>
+            </tr>
+            <tr>
+              <th><span class="id">05</span>常规文字</th>
+              <td><span class="font">Jaldi</span><br>中性、易读的阅读字体</td>
+              <td><span class="size">17px</span><br>作为持续阅读的基准</td>
+              <td>项目简介、职称、说明文字与首屏身份副句</td>
+              <td>公司 · 职称<br>Showreel note、空间装置说明<br>A CREATIVE DEVELOPER</td>
+            </tr>
+            <tr>
+              <th><span class="id">06</span>行动字</th>
+              <td><span class="font">Jaldi</span><br>用明确的互动记号，让人知道可以前往下一处</td>
+              <td><span class="size">35px</span><br>独立字号档，既能被看见，也不抢作品标题</td>
+              <td>进入更多作品、发送邮件等需要点击的主要出口</td>
+              <td>View all<br>Drop me an email</td>
+            </tr>
+            <tr>
+              <th><span class="id">07</span>最末信息字</th>
+              <td><span class="font">页签：Special Gothic Expanded One</span><br>其余：Jaldi</td>
+              <td><span class="size">统一：12px</span><br>最低层级，只要清楚可读即可</td>
+              <td>页签、项目标签、项目计数、年份、账号与版权等辅助信息</td>
+              <td>HOME / WORKS / BREAK / ABOUT<br>项目标签、( N5 )<br>© 2026、@Minnie Zhuang</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="note">当前确认的是字体架构与计划字号。这张表不会自动改变首页；需要实际调整时，再逐项指定并验证。<br><br><strong>项目卡固定模板：</strong>公司／职称使用灰色斜体；项目说明使用原来的辅助灰。全部项目卡共用这套规则。</p>
+  </main>
+</body>
+</html>
