@@ -44,12 +44,12 @@ window.WORKS_DATA = [
     // thumb/*.jpg，画廊和图带渲染用这个）和 full（原图，只有点击放大时
     // 才加载，见 works.js 的 fillDetail()/openLightbox()）。
     pages: [
-      { src: 'projects/nba2k-online/pages/thumb/1背包.jpg', full: 'projects/nba2k-online/pages/1背包.png' },
-      { src: 'projects/nba2k-online/pages/thumb/2街头生涯模式.jpg', full: 'projects/nba2k-online/pages/2街头生涯模式.png' },
-      { src: 'projects/nba2k-online/pages/thumb/3组队 好友 聊天.jpg', full: 'projects/nba2k-online/pages/3组队 好友 聊天.png' },
-      { src: 'projects/nba2k-online/pages/thumb/4系统设置.jpg', full: 'projects/nba2k-online/pages/4系统设置.png' },
-      { src: 'projects/nba2k-online/pages/thumb/5赛事选择.jpg', full: 'projects/nba2k-online/pages/5赛事选择.png' },
-      { src: 'projects/nba2k-online/pages/thumb/6详情对比.jpg', full: 'projects/nba2k-online/pages/6详情对比.png' },
+      { src: 'projects/nba2k-online/pages/thumb/1背包.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/1背包.png' },
+      { src: 'projects/nba2k-online/pages/thumb/2街头生涯模式.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/2街头生涯模式.png' },
+      { src: 'projects/nba2k-online/pages/thumb/3组队 好友 聊天.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/3组队 好友 聊天.png' },
+      { src: 'projects/nba2k-online/pages/thumb/4系统设置.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/4系统设置.png' },
+      { src: 'projects/nba2k-online/pages/thumb/5赛事选择.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/5赛事选择.png' },
+      { src: 'projects/nba2k-online/pages/thumb/6详情对比.jpg', full: 'https://media.minniezhuang.com/works/projects/nba2k-online/pages/6详情对比.png' },
       { src: 'projects/nba2k-online/pages/thumb/7快捷战术.jpg', full: 'projects/nba2k-online/pages/7快捷战术.png' },
     ],
   },
