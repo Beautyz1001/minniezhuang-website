@@ -104,37 +104,47 @@
     const note = document.querySelector('.showreel-note');
     const copy = document.querySelector('.showreel-copy');
 
-    /* 视频开关（2026-09-08）。⚠ 必须写在下面那条 return 之前：
-       窄屏和「减少动态」下缩小动画不跑，但视频照样要播。
-       视频是 preload="none" 的，所以真正开始下载的时刻就是这里第一次 play()。
-       ⚠ play() 的 Promise 一定要 catch——切走再切回时偶尔会抛未处理异常。 */
+    /* 视频开关。必须写在下面那条 return 之前：窄屏和「减少动态」下缩小动画不跑，
+       但视频照样要播。 */
     const video = media && media.querySelector('video');
     if (video && section) {
-      /* 首段视频在门洞动画后很快就会出现。原来 preload="none" 会让它到
-         进入视口的那一刻才开始请求，慢网下就只能先看到 poster。首屏资源完成
-         后，利用浏览器空闲时间提前预取；保留 poster 作为加载期间的稳定画面，
-         同时尊重用户的省流设置。 */
+      /* 首段在门洞后很快出现：不能等 window.load（它会等待整页的图片等资源），
+         而是在浏览器第一次空闲时预取。poster 始终承担下载期间和失败时的画面。 */
+      let isActive = false;
+      let retryAttempt = 0;
+      const retryDelays = [1200, 3600];
       const warmUpVideo = () => {
         if (navigator.connection && navigator.connection.saveData) return;
         video.preload = 'auto';
         video.load();
       };
-      const scheduleWarmUp = () => {
-        if ('requestIdleCallback' in window) {
-          window.requestIdleCallback(warmUpVideo, { timeout: 1200 });
-        } else {
-          window.setTimeout(warmUpVideo, 450);
-        }
-      };
-      if (document.readyState === 'complete') scheduleWarmUp();
-      else window.addEventListener('load', scheduleWarmUp, { once: true });
+      /* HTML 已用 preload="auto" 随首页立即下载；这里仅保留一次 load()，
+         兼容忽略 preload 提示的浏览器。 */
+      warmUpVideo();
+
+      video.addEventListener('canplay', () => { retryAttempt = 0; });
+      video.addEventListener('error', () => {
+        if (navigator.onLine === false || retryAttempt >= retryDelays.length) return;
+        const delay = retryDelays[retryAttempt++];
+        window.setTimeout(() => {
+          const source = video.getAttribute('src');
+          if (!source) return;
+          video.removeAttribute('src');
+          video.load();
+          video.setAttribute('src', source);
+          video.preload = 'auto';
+          video.load();
+          if (isActive) video.play().catch(() => {});
+        }, delay);
+      });
 
       ScrollTrigger.create({
         trigger: section,
         start: 'top bottom',
         end: 'bottom top',
         onToggle: self => {
-          if (self.isActive) video.play().catch(() => {});
+          isActive = self.isActive;
+          if (isActive) video.play().catch(() => {});
           else video.pause();
         }
       });
@@ -791,26 +801,62 @@
     ScrollTrigger.addEventListener('refreshInit', layout);
     cleanups.push(() => ScrollTrigger.removeEventListener('refreshInit', layout));
 
-    /* 银幕里的视频（2026-09-08）：只在这一段进视口时播，离开就暂停。
-       ⚠ 不要改成 HTML 里写 autoplay：这一段在页面很靠下的位置，
-       一进页面就开播等于立刻下载 24 MB，首屏和 Works 段都要跟着抢带宽。
-       这里用一条独立的 ScrollTrigger（不带 scrub），只做开关，每帧零开销。
-       play() 返回的 Promise 在浏览器拦截自动播放时会 reject，必须 catch 掉，
-       否则控制台会冒未处理的异常——视频是 muted，正常不会被拦，但换标签页
-       回来那一下偶尔会。 */
+    /* 银幕视频：到达前约一屏才赋予 src 并预取，避免初始页面解析时抢首屏资源。
+       ScrollTrigger 仍只负责播放开关；poster 负责下载期间与最终失败时的画面。 */
     const video = screen.querySelector('video');
     if (video) {
+      let isActive = false;
+      let isLoaded = false;
+      let retryAttempt = 0;
+      const retryDelays = [1200, 3600];
+      const prepareVideo = () => {
+        if (isLoaded) return;
+        const source = video.dataset.src;
+        if (!source) return;
+        isLoaded = true;
+        video.src = source;
+        video.preload = 'auto';
+        video.load();
+      };
+      const playVideo = () => {
+        prepareVideo();
+        if (isActive) video.play().catch(() => {});
+      };
+
+      if ('IntersectionObserver' in window) {
+        const preloader = new IntersectionObserver(entries => {
+          if (!entries.some(entry => entry.isIntersecting)) return;
+          prepareVideo();
+          preloader.disconnect();
+        }, { rootMargin: `${Math.round(window.innerHeight * 1.5)}px 0px` });
+        preloader.observe(section);
+        cleanups.push(() => preloader.disconnect());
+      }
+
+      video.addEventListener('canplay', () => { retryAttempt = 0; });
+      video.addEventListener('error', () => {
+        if (navigator.onLine === false || retryAttempt >= retryDelays.length) return;
+        const delay = retryDelays[retryAttempt++];
+        window.setTimeout(() => {
+          const source = video.dataset.src;
+          if (!source) return;
+          video.removeAttribute('src');
+          video.load();
+          video.src = source;
+          video.preload = 'auto';
+          video.load();
+          if (isActive) video.play().catch(() => {});
+        }, delay);
+      });
+
       ScrollTrigger.create({
         trigger: section,
         start: 'top bottom',
         end: 'bottom top',
         onToggle: self => {
-          if (self.isActive) {
-            const played = video.play();
-            if (played && played.catch) played.catch(() => {});
-          } else {
-            video.pause();
-          }
+          isActive = self.isActive;
+          if (isActive) playVideo();
+          else video.pause();
         }
       });
     }

@@ -39,6 +39,15 @@
 (function () {
   'use strict';
 
+  /* 先接管 head 里的安全兜底，再做任何条件判断。首访时后续脚本、字体和 3D
+     都可能需要数秒；此时真正的控制器已经在运行，不能再让固定计时器把黑幕
+     提前撤掉。若控制器确实无法继续，下面每条降级分支都会调用 disarm()。 */
+  window.__homepageIntroBooted = true;
+  if (window.__homepageIntroFallback) {
+    clearTimeout(window.__homepageIntroFallback);
+    window.__homepageIntroFallback = null;
+  }
+
   /* 标题入场的两个起点。主角是"从中间往两边展开"（遮罩，见 CSS 里的
      .title-row.intro-reveal），下面这两个只是给展开加一点镜头味道的配角，
      不能盖过展开本身——所以模糊量比单做合焦那版小一半多。
@@ -76,7 +85,7 @@
   const TITLE_AT = 1.55;
 
   const root = document.documentElement;
-  const disarm = () => root.classList.remove('intro-armed');
+  const disarm = () => root.classList.remove('intro-armed', 'intro-running');
 
   /* <head> 里那行内联脚本没跑（比如这个文件被单独引用），就什么都不做。 */
   if (!root.classList.contains('intro-armed')) return;
@@ -187,31 +196,8 @@
     gsap.set(loader, { opacity: 1 });
     gsap.set(veil,   { opacity: 1, visibility: 'visible' });
     gsap.set(canvas, { opacity: 0 });
-    disarm();
-
-    /* 加载还没走完用户就滚了：整段开场作废，直接把页面交出去。
-       不能只跳过入场——进度条变门洞那一下是按"页面在顶部"算的几何，
-       页面一滚门就移位了，再演下去矩形会落在错的地方。 */
-    let aborted = false;
-    function abort() {
-      if (aborted) return;
-      aborted = true;
-      gsap.killTweensOf([shown, bar, glow, loader, veil, canvas]);
-      /* 第二幕已经建好了（就等着播），作废时要连它和它写下的起始状态一起收干净，
-         否则标题会永远停在"透明 + 模糊"的入场起点上，页面等于是空的。 */
-      if (introTl) introTl.kill();
-      titleRow.classList.remove('intro-reveal');
-      gsap.set([nav, eyebrow, titleRow], { clearProps: 'all' });
-      /* canvas 的不透明度是加载那一步按到 0 的，作废时必须还回去，
-         否则 3D 那一层会一直是隐形的。 */
-      gsap.set(canvas, { clearProps: 'opacity' });
-      loader.remove();
-      veil.remove();
-      window.removeEventListener('wheel', abort);
-      window.removeEventListener('touchstart', abort);
-    }
-    window.addEventListener('wheel', abort, { passive: true });
-    window.addEventListener('touchstart', abort, { passive: true });
+    /* 进度条已经接管遮罩，但仍锁住滚动，直到入场动画完整结束。 */
+    root.classList.remove('intro-armed');
 
     /* 显示值追着真实进度走。用一个补间去追，而不是直接跳——
        信号是一件一件到的（0 → 1/3 → 2/3 → 1），直接赋值会看到条一格一格蹦。 */
@@ -224,7 +210,6 @@
 
     let settling = false;
     (function tick() {
-      if (aborted) return;
       const elapsed = performance.now() - t0;
       const allIn   = done >= TOTAL;
       const timeout = elapsed >= MAX_MS;
@@ -270,10 +255,6 @@
        也就是**第二幕第一帧的门洞本身**。点和门从此是同一个矩形，
        接下来两者一起放大、一个淡出一个淡入，几何上完全重合，没有可断的地方。 */
     function morph() {
-      if (aborted) return;
-      window.removeEventListener('wheel', abort);
-      window.removeEventListener('touchstart', abort);
-
       /* 收完立刻放第二幕。这里不能再 requestAnimationFrame 一次：
          多等一帧就是一次可见的停顿。 */
       const tl = gsap.timeline({ onComplete: () => introTl.play() });
@@ -355,25 +336,10 @@
         willChange: 'filter, transform, mask-image'
       });
 
-    /* 开场没播完用户就开始滚了，说明他不想看。
-       直接跳到终点，而不是硬拦着——拦滚动比让动画被打断更糟。 */
-    function unbindSkip() {
-      window.removeEventListener('wheel', skip);
-      window.removeEventListener('touchstart', skip);
-      window.removeEventListener('keydown', skip);
-    }
-    function skip() { tl.progress(1); }
-
     const tl = gsap.timeline({
       paused: true,
       defaults: { ease: 'power2.out' },
-      onStart() {
-        window.addEventListener('wheel', skip, { passive: true });
-        window.addEventListener('touchstart', skip, { passive: true });
-        window.addEventListener('keydown', skip);
-      },
       onComplete() {
-        unbindSkip();
         /* 收尾要干净：动画留下的行内样式全部清掉，让这些元素回到
            样式表说了算的状态，滚动动画接手时不会撞上残留的 transform。 */
         gsap.set([canvas, nav, titleRow], { clearProps: 'all' });
@@ -383,6 +349,7 @@
         titleRow.classList.remove('intro-reveal');
         veil.remove();
         loader.remove();
+        root.classList.remove('intro-running');
       }
     });
 

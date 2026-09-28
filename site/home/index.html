@@ -20,13 +20,18 @@
 <link rel="stylesheet" href="css/homepage-portal.css">
 
 <!-- 入场动画的起始状态。必须在这里、必须是内联的：晚一步浏览器就会先画一帧
-     完整画面，开场变成"闪一下再变黑"。带 4 秒保险，万一 JS 没跑起来，
-     黑幕自己撤，页面不会被永远盖住。细节见 js/homepage-portal-intro.js。 -->
+     完整画面，开场变成"闪一下再变黑"。
+
+     兜底只在入场控制器根本没有加载时才撤幕。不能用固定 4 秒直接解除
+     intro-armed：首访解析 Three.js 与其他交互脚本较慢时，4 秒会先露出
+     底层内容，随后真正的入场脚本因已解除武装而被跳过。 -->
 <script>
-  document.documentElement.classList.add('intro-armed');
-  setTimeout(function () {
-    document.documentElement.classList.remove('intro-armed');
-  }, 4000);
+  document.documentElement.classList.add('intro-armed', 'intro-running');
+  window.__homepageIntroFallback = setTimeout(function () {
+    if (!window.__homepageIntroBooted) {
+      document.documentElement.classList.remove('intro-armed', 'intro-running');
+    }
+  }, 12000);
 </script>
 </head>
 <body>
@@ -216,17 +221,15 @@
 
                  ⚠ `poster` 留着原来那张静帧：视频 54 MB，加载完之前这一格不能是黑的，
                    否则整个缩小动画会从一块黑洞开始。
-                 ⚠ `preload="none"`：这一格在页面最顶上、门洞刚走完就露出来，
-                   写 preload="auto" 或 autoplay 等于一进站就抢 54 MB 带宽，
-                   首屏的 Three.js 和 Works 那五张图会跟着变慢。
-                   改成由 setupShowreelVideo() 里的开关：进视口才 play()，离开就 pause()。
+                 ⚠ `preload="auto"`：和首页一起下载；第一帧仍由 poster 承担，
+                   进视口才 play()，离开就 pause()。
                  ⚠ 视频尺寸必须在 CSS 里单独写（.showreel-media video）。
                    这一格的 <img> 一直是按固有尺寸显示、靠容器裁切的，
                    2560×1440 的视频照这个走会把整格撑爆。 -->
             <figure class="showreel-media">
-              <video src="https://media.minniezhuang.com/home/assets/homepage/scroll/视频1.mp4"
+              <video src="assets/homepage/scroll/视频1.mp4"
                      poster="assets/homepage/scroll/占位/portal-study.png"
-                     muted loop playsinline preload="none"
+                     muted loop playsinline preload="auto"
                      aria-label="红光穿过深色空间的抽象影像"></video>
             </figure>
           </div>
@@ -340,9 +343,9 @@
                不写 autoplay：这一段在页面很靠下的位置，一进页面就开播等于白下载 24 MB。
                播放由 setupCinema() 按段落是否在视口里控制。 -->
           <figure class="cinema-screen">
-            <video src="https://media.minniezhuang.com/home/assets/homepage/scroll/视频2.mp4"
+            <video data-src="https://media.minniezhuang.com/home/assets/homepage/scroll/视频2.mp4"
                    poster="assets/homepage/scroll/break/5.jpg"
-                   muted loop playsinline preload="metadata"
+                   muted loop playsinline preload="none"
                    aria-label="ALONE IN KYOTO：霓虹招牌构成的夜间街景"></video>
           </figure>
         </div>
@@ -705,6 +708,10 @@
   <script src="js/lib/gsap.min.js"></script>
   <script src="js/lib/ScrollTrigger.min.js"></script>
   <script src="js/lib/lenis.min.js"></script>
+  <!-- 开场控制器必须在其余重型交互脚本之前启动。它会自行等待 3D、字体和
+       window.load，不会抢走后续脚本的初始化时间；但黑幕不能等到这些脚本全部
+       解析完才接管，否则首访会露出页面底层素材。 -->
+  <script src="js/homepage-portal-intro.js"></script>
   <!-- 轮播先建立 pin 占位；随后滚动叙事才量 BREAK 的真实文档位置。
        若反过来，BREAK 的一次性文字入场会在 pin 补出的区间里提前完成，
        看起来就像完全没有动画。 -->
@@ -726,7 +733,5 @@
        共用逻辑在 route-transition.js，这个页面的入口配置在 homepage-route-transition.js。 -->
   <script src="../shared/js/route-transition.js"></script>
   <script src="js/homepage-route-transition.js"></script>
-  <!-- 入场动画。放在最后：它要用 gsap，也要等前面那些脚本把标题量完。 -->
-  <script src="js/homepage-portal-intro.js"></script>
 </body>
 </html>

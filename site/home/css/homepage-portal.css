@@ -4225,6 +4225,13 @@ html.intro-armed .site-nav       { opacity: 0; }
 html.intro-armed .eyebrow        { filter: opacity(0); }
 html.intro-armed .title-row      { filter: opacity(0); }
 
+/* 加载条和入场动画是首页的第一幕；没有完整演完之前不允许滚动把底层内容带出来。 */
+html.intro-running,
+html.intro-running body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* 关掉动画偏好时直接给最终状态，不播时间轴。 */
 @media (prefers-reduced-motion: reduce) {
   html.intro-armed .intro-veil    { opacity: 0; visibility: hidden; }
